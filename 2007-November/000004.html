@@ -1,0 +1,220 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Genkernel-dev] [PATCH] Use the running kernel config automatically
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/genkernel-dev/2007-November/index.html" >
+   <LINK REL="made" HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20%5BPATCH%5D%20Use%20the%20running%20kernel%20config%20automatically&In-Reply-To=%3C11952476832304-git-send-email-trucker%40genkernel.org%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000003.html">
+   <LINK REL="Next"  HREF="000005.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Genkernel-dev] [PATCH] Use the running kernel config automatically</H1>
+    <B>Jean-Francois Richard</B> 
+    <A HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20%5BPATCH%5D%20Use%20the%20running%20kernel%20config%20automatically&In-Reply-To=%3C11952476832304-git-send-email-trucker%40genkernel.org%3E"
+       TITLE="[Genkernel-dev] [PATCH] Use the running kernel config automatically">trucker at genkernel.org
+       </A><BR>
+    <I>Fri Nov 16 22:14:43 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000003.html">[Genkernel-dev] [PATCH] Introduce an &quot;install-to-prefix&quot;
+</A></li>
+        <LI>Next message: <A HREF="000005.html">[Genkernel-dev] [PATCH] dist/ directory in user's cache
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4">[ date ]</a>
+              <a href="thread.html#4">[ thread ]</a>
+              <a href="subject.html#4">[ subject ]</a>
+              <a href="author.html#4">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>From: Jean-Francois Richard &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/genkernel-dev">richard at walker.drap.polymtl.ca</A>&gt;
+
+It will now find the kernel configuration in this order:
+  1) /etc/kernels
+  2) /proc/config.gz
+  3) gk-shipped
+  4) defaults
+---
+ trunk/core/gen_processKernelTree.sh |   48 ++++++++++++++++++++--------------
+ trunk/modules/kernel_config.sh      |   48 ++++++++++++----------------------
+ 2 files changed, 45 insertions(+), 51 deletions(-)
+
+diff --git a/trunk/core/gen_processKernelTree.sh b/trunk/core/gen_processKernelTree.sh
+index 15a3436..eb52de9 100644
+--- a/trunk/core/gen_processKernelTree.sh
++++ b/trunk/core/gen_processKernelTree.sh
+@@ -270,31 +270,39 @@ kernel_config_is_not_set() {
+ 
+ 
+ determine_config_file() {
+-	# echo &quot;$(profile_get_key kernel-config)&quot;
+-	# echo &quot;/etc/kernels/kernel-config-${ARCH}-${KV_FULL}&quot;
+-	# echo &quot;${CONFIG_DIR}/kernel-config-${KV_FULL}&quot;
+-	# echo &quot;${DEFAULT_KERNEL_CONFIG}&quot;
+-	# echo &quot;${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}&quot;
+-	# echo &quot;${CONFIG_DIR}/kernel-config&quot;
+ 
+-	if [ -n &quot;$(profile_get_key kernel-config)&quot; ];then
+-		KERNEL_CONFIG=&quot;$(profile_get_key kernel-config)&quot;
++    rm &quot;${TEMP}/from-running-system.config&quot; 2&gt;/dev/null
+ 
+-	elif [ -f &quot;${CONFIG_DIR}/kernel-config-${KV_FULL}&quot; ]; then
+-		KERNEL_CONFIG=&quot;${CONFIG_DIR}/kernel-config-${KV_FULL}&quot;
+-
+-	elif [ &quot;${DEFAULT_KERNEL_CONFIG}&quot; != &quot;&quot; -a -f &quot;${DEFAULT_KERNEL_CONFIG}&quot; ]; then
+-		KERNEL_CONFIG=&quot;${DEFAULT_KERNEL_CONFIG}&quot;
++    if [ -f &quot;/proc/config.gz&quot; ]; then
++	zcat /proc/config.gz &gt; &quot;${TEMP}/from-running-system.config&quot; 2&gt; /dev/null
++	logicTrue $(profile_get_key running-kernel-config) &amp;&amp; \\
++	    profile_set_key kernel-config &quot;${TEMP}/from-running-system.config&quot;
++    else
++	logicTrue $(profile_get_key running-kernel-config) &amp;&amp; \
++            die 'Error: /proc/config.gz is not found.  Running-kernel-config failed!'
++    fi
+ 
+-	elif [ -f &quot;${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}&quot; ]; then
+-		KERNEL_CONFIG=&quot;${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}&quot;
++    if [ -n &quot;$(profile_get_key kernel-config)&quot; ]; then
++	KERNEL_CONFIG=&quot;$(profile_get_key kernel-config)&quot;
++	
++    elif [ -f &quot;/etc/kernels/kernel-config-${KV_FULL}&quot; ]; then
++	KERNEL_CONFIG=&quot;/etc/kernels/kernel-config-${KV_FULL}&quot;
+ 
+-	elif [ -f &quot;${CONFIG_DIR}/kernel-config&quot; ]; then
+-	        KERNEL_CONFIG=&quot;${CONFIG_DIR}/kernel-config&quot;
++    elif [ -f &quot;${TEMP}/from-running-system.config&quot; ]; then
++	KERNEL_CONFIG=&quot;${TEMP}/from-running-system.config&quot;
+ 
+-	else
+-		die 'Error: No kernel .config specified, or file not found!'
+-	fi
++    elif [ -f &quot;${CONFIG_DIR}/kernel-config-${KV_FULL}&quot; ]; then
++	KERNEL_CONFIG=&quot;${CONFIG_DIR}/kernel-config-${KV_FULL}&quot;
++	
++    elif [ -f &quot;${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}&quot; ]; then
++	KERNEL_CONFIG=&quot;${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}&quot;
++	
++    elif [ -f &quot;${CONFIG_DIR}/kernel-config&quot; ]; then
++	KERNEL_CONFIG=&quot;${CONFIG_DIR}/kernel-config&quot;
++	
++    else
++	die 'Error: No kernel .config specified, or file not found!'
++    fi
+ }
+ 
+ kbuild_enabled() {
+diff --git a/trunk/modules/kernel_config.sh b/trunk/modules/kernel_config.sh
+index 41a9e90..73db9ea 100644
+--- a/trunk/modules/kernel_config.sh
++++ b/trunk/modules/kernel_config.sh
+@@ -30,15 +30,15 @@ kernel_config::()
+ 	then
+             
+ 		    print_info 1 '&gt;&gt; Cleaning kernel source tree...'
+-            print_info 1 '   Run &quot;make mrproper&quot; as root if this fails'
+-			compile_generic mrproper
++		    print_info 1 '   Run &quot;make mrproper&quot; as root if this fails'
++		    compile_generic mrproper
+ 
+             if [ -f &quot;$(profile_get_key kernel-tree)/localversion-genkernel&quot; ]
+             then
+                 rm -f &quot;$(profile_get_key kernel-tree)/localversion-genkernel&quot; &gt;/dev/null 2&gt;&amp;1
+                 if [ -f &quot;$(profile_get_key kernel-tree)/localversion-genkernel&quot; ]
+                 then
+-			        die &quot;Could not remove localversion-genkernel from the Kernel source tree. Please remove it manually.&quot;
++		    die &quot;Could not remove localversion-genkernel from the Kernel source tree. Please remove it manually.&quot;
+                 fi
+             fi
+ 	fi
+@@ -64,35 +64,13 @@ kernel_config::()
+ 		compile_generic ${KERNEL_ARGS} clean
+ 	fi
+ 
+-	if logicTrue $(profile_get_key gentoo-config)
+-	then
+-	    determine_config_file
+-		print_info 1 &quot;${PRINT_PREFIX}Using default genkernel config from ${KERNEL_CONFIG}&quot;
+-		print_info 1 '        Previous config backed up to .config.bak'
+-		cp &quot;${KERNEL_CONFIG}&quot; &quot;${KBUILD_OUTPUT}/.config&quot; ||\
+-			die 'Could not copy configuration file!'
+-	fi
+-
+-	#use the running kernel config
+-	if logicTrue $(profile_get_key running-kernel-config)
+-	then
+-		print_info 1 &quot;${PRINT_PREFIX}&gt;&gt; Getting config from the running system...&quot;
+-        if [ -f &quot;/proc/config.gz&quot; ]
+-        then
+-		    zcat /proc/config.gz &gt; &quot;${KBUILD_OUTPUT}/.config&quot;
+-		    [ &quot;$?&quot; ] || die 'Error: running-kernel-config failed!'
+-        else
+-            die 'Error: /proc/config.gz is not found.  Running-kernel-config failed!'
+-        fi
+-	fi
+ 	
+-    # When to run oldconfig
+-	if logicTrue $(profile_get_key oldconfig)
+-	then
+-		print_info 1 &quot;${PRINT_PREFIX}&gt;&gt; Running oldconfig...&quot;
+-		yes '' 2&gt;/dev/null | compile_generic ${KERNEL_ARGS} oldconfig
+-		[ &quot;$?&quot; ] || die 'Error: oldconfig failed!'
+-	fi
++	determine_config_file
++	print_info 1 &quot;${PRINT_PREFIX}Using kernel config from ${KERNEL_CONFIG}&quot;
++	cp &quot;${KERNEL_CONFIG}&quot; &quot;$(profile_get_key kbuild-output)/.config&quot; ||\
++	    die 'Could not copy configuration file!'
++
++	cd &quot;$(profile_get_key kbuild-output)&quot;
+ 	
+ 	if logicTrue $(profile_get_key clean)
+ 	then
+@@ -199,6 +177,14 @@ kernel_config::()
+ 		yes '' 2&gt;/dev/null | compile_generic ${KERNEL_ARGS} oldconfig
+ 	fi
+ 
++
++        # Run oldconfig now... if nothing was configured at least
++        # we end up in a good state; else it won't change anything
++	print_info 1 &quot;${PRINT_PREFIX}&gt;&gt; Final pass at oldconfig to make sure everything is OK...&quot;
++	yes '' 2&gt;/dev/null | compile_generic ${KERNEL_ARGS} oldconfig
++	[ &quot;$?&quot; ] || die 'Error: silentoldconfig failed!'
++
++
+ 	compile_generic ${KERNEL_ARGS} prepare
+ 	if [ &quot;$(kernel_config_get &quot;MODULES&quot;)&quot; = 'yes' ]; then
+ 		compile_generic ${KERNEL_ARGS} modules_prepare
+-- 
+1.5.2.5
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000003.html">[Genkernel-dev] [PATCH] Introduce an &quot;install-to-prefix&quot;
+</A></li>
+	<LI>Next message: <A HREF="000005.html">[Genkernel-dev] [PATCH] dist/ directory in user's cache
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4">[ date ]</a>
+              <a href="thread.html#4">[ thread ]</a>
+              <a href="subject.html#4">[ subject ]</a>
+              <a href="author.html#4">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/genkernel-dev">More information about the Genkernel-dev
+mailing list</a><br>
+</body></html>

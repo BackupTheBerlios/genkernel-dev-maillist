@@ -1,0 +1,88 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Genkernel-dev] Auto download distfiles
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/genkernel-dev/2007-December/index.html" >
+   <LINK REL="made" HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20Auto%20download%20distfiles&In-Reply-To=%3C52b8090f0712121055x20cbc997wf8d1a7d817e35038%40mail.gmail.com%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000014.html">
+   <LINK REL="Next"  HREF="000016.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Genkernel-dev] Auto download distfiles</H1>
+    <B>Jean-Francois Richard</B> 
+    <A HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20Auto%20download%20distfiles&In-Reply-To=%3C52b8090f0712121055x20cbc997wf8d1a7d817e35038%40mail.gmail.com%3E"
+       TITLE="[Genkernel-dev] Auto download distfiles">trucker at genkernel.org
+       </A><BR>
+    <I>Wed Dec 12 19:55:01 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000014.html">[Genkernel-dev] Auto download distfiles
+</A></li>
+        <LI>Next message: <A HREF="000016.html">[Genkernel-dev] Havoc talks about zonbu
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#15">[ date ]</a>
+              <a href="thread.html#15">[ thread ]</a>
+              <a href="subject.html#15">[ subject ]</a>
+              <a href="author.html#15">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>genkernel now auto-downloads the needed packages from
+<A HREF="https://genkernel.berlios.de/distfiles/">https://genkernel.berlios.de/distfiles/</A> and places the packages in the
+user's cache directory.
+
+I have put (with Tim's help) some source packages online.  Eric, could
+you add any missing packages? (aoetools, etc.)
+
+
+About integrity verification...
+
+It does not verify the SSL certificate, since the berlios.de
+certificate is self-signed.  We cannot verify its authenticity with a
+CA.
+
+A GPG setup is an alternative, but is a little more complex.  It
+requires distributing signed hashes and the required keys.  And
+then... if we distribute gk with signed hashes from genkernel.org...
+to verify other stuff downloaded from the very same website, it is a
+little silly... how are the hashes any &quot;safer&quot;?  Ok, it is useful to
+verify if there was transport corruption, maybe...
+
+For now it goes over SSL but without certificate validation.  I
+believe we get the transport corruption check with SSL.
+
+
+-- 
+Jean-Francois Richard
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000014.html">[Genkernel-dev] Auto download distfiles
+</A></li>
+	<LI>Next message: <A HREF="000016.html">[Genkernel-dev] Havoc talks about zonbu
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#15">[ date ]</a>
+              <a href="thread.html#15">[ thread ]</a>
+              <a href="subject.html#15">[ subject ]</a>
+              <a href="author.html#15">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/genkernel-dev">More information about the Genkernel-dev
+mailing list</a><br>
+</body></html>

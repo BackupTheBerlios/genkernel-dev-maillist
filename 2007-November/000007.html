@@ -1,0 +1,125 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Genkernel-dev] [PATCH] Tool to build from a git kernel tree
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/genkernel-dev/2007-November/index.html" >
+   <LINK REL="made" HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20%5BPATCH%5D%20Tool%20to%20build%20from%20a%20git%20kernel%20tree&In-Reply-To=%3C792f5f410711241827q6fa72e70g614a071f50917774%40mail.gmail.com%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000006.html">
+   <LINK REL="Next"  HREF="000008.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Genkernel-dev] [PATCH] Tool to build from a git kernel tree</H1>
+    <B>Tim Yamin</B> 
+    <A HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20%5BPATCH%5D%20Tool%20to%20build%20from%20a%20git%20kernel%20tree&In-Reply-To=%3C792f5f410711241827q6fa72e70g614a071f50917774%40mail.gmail.com%3E"
+       TITLE="[Genkernel-dev] [PATCH] Tool to build from a git kernel tree">plasmaroo at genkernel.org
+       </A><BR>
+    <I>Sun Nov 25 03:27:21 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000006.html">[Genkernel-dev] [PATCH] Tool to build from a git kernel tree
+</A></li>
+        <LI>Next message: <A HREF="000008.html">[Genkernel-dev] Using the UnionFS-patched kernel tree
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Looks cool, please commit this one. I'll try and get to the other
+patches soon! :-)
+
+Tim
+
+On Nov 25, 2007 2:22 AM, Jean-Francois Richard &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/genkernel-dev">trucker at genkernel.org</A>&gt; wrote:
+&gt;<i> This tool checks out a particular tag in a given git kernel tree, then
+</I>&gt;<i> launches genkernel on it.
+</I>&gt;<i> ---
+</I>&gt;<i>  trunk/genkernel-from-git |   43 +++++++++++++++++++++++++++++++++++++++++++
+</I>&gt;<i>  1 files changed, 43 insertions(+), 0 deletions(-)
+</I>&gt;<i>  create mode 100755 trunk/genkernel-from-git
+</I>&gt;<i>
+</I>&gt;<i> diff --git a/trunk/genkernel-from-git b/trunk/genkernel-from-git
+</I>&gt;<i> new file mode 100755
+</I>&gt;<i> index 0000000..e8030ce
+</I>&gt;<i> --- /dev/null
+</I>&gt;<i> +++ b/trunk/genkernel-from-git
+</I>&gt;<i> @@ -0,0 +1,43 @@
+</I>&gt;<i> +#!/bin/bash
+</I>&gt;<i> +
+</I>&gt;<i> +script_name=$(basename $0)
+</I>&gt;<i> +
+</I>&gt;<i> +function usage() {
+</I>&gt;<i> +    local e=&quot;$@&quot;
+</I>&gt;<i> +    if [ -n &quot;$e&quot; ]; then
+</I>&gt;<i> +       echo
+</I>&gt;<i> +       echo Error: $@ &gt;&amp;2
+</I>&gt;<i> +       echo
+</I>&gt;<i> +    fi
+</I>&gt;<i> +    echo &quot;usage: &quot; &gt;&amp;2
+</I>&gt;<i> +    echo &quot;  $script_name &lt;kernel-tree-path&gt; &lt;version-tag&gt; -- [genkernel options]&quot; &gt;&amp;2
+</I>&gt;<i> +    echo &quot;  &lt;version-tag&gt; can be set to 'latest' to use the most recent tag&quot; &gt;&amp;2
+</I>&gt;<i> +    echo &quot;example:&quot;
+</I>&gt;<i> +    echo &quot;  $script_name ../linux.git latest -- --unionfs all::&quot; &gt;&amp;2
+</I>&gt;<i> +    exit 1
+</I>&gt;<i> +}
+</I>&gt;<i> +
+</I>&gt;<i> +which git-checkout &amp;&gt;/dev/null || usage &quot;Could not find Git tools in your path&quot;
+</I>&gt;<i> +which genkernel &amp;&gt;/dev/null || usage &quot;Could not find 'genkernel' in your path&quot;
+</I>&gt;<i> +[ &quot;$#&quot; -lt &quot;3&quot; ] &amp;&amp; usage
+</I>&gt;<i> +[ &quot;$3&quot; != &quot;--&quot; ] &amp;&amp; usage
+</I>&gt;<i> +ktree=&quot;$1&quot;
+</I>&gt;<i> +ktag=&quot;$2&quot;
+</I>&gt;<i> +[ ! -d &quot;$ktree/.git&quot; ] &amp;&amp; usage &quot;The path specified for the kernel tree is not a Git directory.&quot;
+</I>&gt;<i> +cd &quot;$ktree&quot;
+</I>&gt;<i> +if [ &quot;$ktag&quot; != &quot;latest&quot; ]; then
+</I>&gt;<i> +    [ &quot;$(git-tag -l $ktag)&quot; != &quot;$ktag&quot; ] &amp;&amp; usage &quot;The specified tag does not exist in the kernel git tree&quot;
+</I>&gt;<i> +else
+</I>&gt;<i> +    ktag=&quot;$(git-tag | tail -n1 )&quot;
+</I>&gt;<i> +fi
+</I>&gt;<i> +echo &quot;Checking out tag '$ktag' in the kernel tree&quot;
+</I>&gt;<i> +git-checkout &quot;$ktag&quot; || exit 1
+</I>&gt;<i> +
+</I>&gt;<i> +
+</I>&gt;<i> +shift
+</I>&gt;<i> +shift
+</I>&gt;<i> +shift
+</I>&gt;<i> +# phew. alright now!
+</I>&gt;<i> +
+</I>&gt;<i> +echo &quot;Running genkernel --kernel-tree='$ktree' $@&quot;
+</I>&gt;<i> +genkernel --kernel-tree=&quot;$ktree&quot; $@
+</I>&gt;<i> --
+</I>&gt;<i> 1.5.3.5.737.gdee1b
+</I>
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000006.html">[Genkernel-dev] [PATCH] Tool to build from a git kernel tree
+</A></li>
+	<LI>Next message: <A HREF="000008.html">[Genkernel-dev] Using the UnionFS-patched kernel tree
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/genkernel-dev">More information about the Genkernel-dev
+mailing list</a><br>
+</body></html>

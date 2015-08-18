@@ -1,0 +1,148 @@
+From trucker at genkernel.org  Thu Dec  6 17:09:29 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Thu, 6 Dec 2007 11:09:29 -0500
+Subject: [Genkernel-dev] pre-root and post-root hooks
+Message-ID: <52b8090f0712060809g190bfc93rf60da31f0a165bf5@mail.gmail.com>
+
+Hi,
+
+I was thinking of adding two directories: $LIBGMI/pre-root and
+$LIBGMI/post-root.  The hook scripts would be much like the fsloaders,
+with parameter parsing and help directives.  /init would run, you
+guessed it, all scripts in pre-root after the network setup, and all
+scripts in post-root after the union mounting is over.
+
+Already, the "unpack" directive could be moved to a "post-root" hook.
+
+kernel root=blah;blah; post-root=unpack:/mnt/tar1.gz:/mnt/tar2.gz;
+
+Tim, probably the zonbu stuff could use such a scheme?
+
+-- 
+Jean-Francois Richard
+
+
+From trucker at genkernel.org  Thu Dec  6 17:12:27 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Thu, 6 Dec 2007 11:12:27 -0500
+Subject: [Genkernel-dev] post-root hook: install modules to final root
+Message-ID: <52b8090f0712060812s7d8fbdf7pdb12a2a38c943c75@mail.gmail.com>
+
+I would like to make it easy to use a given vanilla distribution as a
+read-only bottom layer and boot it with a genkernel kernel.  I believe
+this would make it easy to turn any squashfs/loop image into some kind
+of "LiveNFS" or "LiveHTTP" system, with gmi.
+
+However, since the vanilla distribution squashfs does not include a
+/lib/modules/<gk-kernel-version> tree, all modprobing done inside the
+booted OS will fail.
+
+
+To fix this, a possibility would be to
+
+a) generate a cpio containing the whole generated /lib/modules and
+insert it into the initramfs.  There is already a
+--kernel-modules-cpio that does this, I believe.
+
+b) Add a post-root hook, that would work like this :
+
+if all modules are included in the initramfs (check for
+/lib/modules/.../modules.dep)
+    if root is read-write
+        if root does not contain /lib/modules/<proper-version>
+            copy from initramfs to the root/lib/modules/<proper-version>
+
+
+Do you see any problems with this method?
+
+
+-- 
+Jean-Francois Richard
+
+
+From trucker at genkernel.org  Wed Dec 12 15:29:04 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Wed, 12 Dec 2007 09:29:04 -0500
+Subject: [Genkernel-dev] Auto download distfiles
+Message-ID: <52b8090f0712120629y30e5a5bbh3074cacf03349f08@mail.gmail.com>
+
+Hi,
+
+I was wondering:
+
+Should we auto-download distfiles or simply tell "please download it
+from gk.org/dist/xyz and put it /var/tmp/gk-user/dist/"?
+
+If we do auto-download, should we add some GPG signature checking to
+prevent security and integrity problems?  In this case, files would
+need to be signed with some kind of "gk maintainer key", and we would
+need to distribute the public key with gk.  (Maybe it is overkill,
+though.)  Another option would be to use SSL.  berlios.de has https :
+we could simply check for the berlios certificate when downloading.
+
+Please tell me how you would handle the distfiles problem, I will be
+looking at implementing it soon (as I need to download the uclibc
+tarball!).
+
+Thanks,
+
+-- 
+Jean-Francois Richard
+
+
+From trucker at genkernel.org  Wed Dec 12 19:55:01 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Wed, 12 Dec 2007 13:55:01 -0500
+Subject: [Genkernel-dev] Auto download distfiles
+In-Reply-To: <792f5f410712120630m472404b3w743d71bf765ff107@mail.gmail.com>
+References: <52b8090f0712120629y30e5a5bbh3074cacf03349f08@mail.gmail.com>
+	<792f5f410712120630m472404b3w743d71bf765ff107@mail.gmail.com>
+Message-ID: <52b8090f0712121055x20cbc997wf8d1a7d817e35038@mail.gmail.com>
+
+genkernel now auto-downloads the needed packages from
+https://genkernel.berlios.de/distfiles/ and places the packages in the
+user's cache directory.
+
+I have put (with Tim's help) some source packages online.  Eric, could
+you add any missing packages? (aoetools, etc.)
+
+
+About integrity verification...
+
+It does not verify the SSL certificate, since the berlios.de
+certificate is self-signed.  We cannot verify its authenticity with a
+CA.
+
+A GPG setup is an alternative, but is a little more complex.  It
+requires distributing signed hashes and the required keys.  And
+then... if we distribute gk with signed hashes from genkernel.org...
+to verify other stuff downloaded from the very same website, it is a
+little silly... how are the hashes any "safer"?  Ok, it is useful to
+verify if there was transport corruption, maybe...
+
+For now it goes over SSL but without certificate validation.  I
+believe we get the transport corruption check with SSL.
+
+
+-- 
+Jean-Francois Richard
+
+
+From trucker at genkernel.org  Sat Dec 15 14:15:02 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Sat, 15 Dec 2007 08:15:02 -0500
+Subject: [Genkernel-dev] Havoc talks about zonbu
+Message-ID: <52b8090f0712150515r30a38a7fie7d8d89a3b0d0f9e@mail.gmail.com>
+
+I was pleased to see that The Havoc Pennington has a blog entry in
+which he talks (but very little) about zonbu... which uses genkernel
+as the base of its "statelessness".
+
+http://log.ometer.com/2007-11.html
+
+Good job gk! :)
+
+-- 
+Jean-Francois Richard
+
+

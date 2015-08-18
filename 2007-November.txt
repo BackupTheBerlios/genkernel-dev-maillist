@@ -1,0 +1,1359 @@
+From trucker at genkernel.org  Thu Nov 15 21:16:20 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Thu, 15 Nov 2007 15:16:20 -0500
+Subject: [Genkernel-dev] Use external kernel output directory by default for
+	every user
+Message-ID: <52b8090f0711151216v80a47deq473047547842cfbb@mail.gmail.com>
+
+Hi,
+
+I was wondering if you see any issues at building the kernel outside
+the source tree by default, for every users (including root).
+
+Now, my understanding is that if the user is root, genkernel will
+build (and leave dirt) in the kernel source tree.  When a user runs
+genkernel after root, its mrproper/clean calls will fail because it
+cannot clean the files left over by root in the source tree.
+
+If we always set a kernel output directory in the TEMP directory of
+the user, the source tree stays pristine at all time (given nobody
+touches it by other means), minimizing the risk of such a problem
+arising.  As a side effect, it also simplifies the code path, since
+there is no more need to check if we can write to the kernel tree or
+not.
+
+I plan on implementing this in the days to come and would like to have
+your opinion on this idea before modifying the source.
+
+Thanks,
+
+Jean-Francois Richard
+
+
+From trucker at genkernel.org  Thu Nov 15 21:20:29 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Thu, 15 Nov 2007 15:20:29 -0500
+Subject: [Genkernel-dev] Trap handler for TEMP cleanup
+Message-ID: <52b8090f0711151220nff2cb23k762fbb03eb22ead4@mail.gmail.com>
+
+Hi,
+
+I want to add a TEMP directory cleanup routine called either at the
+end of execution, or when a trap occurs.
+
+Before going any further, I would like to know why this is commented :
+
+#trap trap_cleanup SIGHUP SIGQUIT SIGINT SIGTERM SIGKILL
+
+Thanks,
+
+Jean-Francois Richard
+
+
+From plasmaroo at genkernel.org  Thu Nov 15 21:25:13 2007
+From: plasmaroo at genkernel.org (Tim Yamin)
+Date: Thu, 15 Nov 2007 20:25:13 +0000
+Subject: [Genkernel-dev] Trap handler for TEMP cleanup
+In-Reply-To: <52b8090f0711151220nff2cb23k762fbb03eb22ead4@mail.gmail.com>
+References: <52b8090f0711151220nff2cb23k762fbb03eb22ead4@mail.gmail.com>
+Message-ID: <792f5f410711151225r18111d2as1d9e6c41f0645f97@mail.gmail.com>
+
+Probably because it tied into legacy code which was copied over but
+not used. Should be safe to uncomment as long as you sort out
+trap_cleanup to do the right things.
+
+Tim
+
+On Nov 15, 2007 8:20 PM, Jean-Francois Richard <trucker at genkernel.org> wrote:
+> Hi,
+>
+> I want to add a TEMP directory cleanup routine called either at the
+> end of execution, or when a trap occurs.
+>
+> Before going any further, I would like to know why this is commented :
+>
+> #trap trap_cleanup SIGHUP SIGQUIT SIGINT SIGTERM SIGKILL
+>
+> Thanks,
+>
+> Jean-Francois Richard
+> _______________________________________________
+> Genkernel-dev mailing list
+> Genkernel-dev at lists.berlios.de
+> https://lists.berlios.de/mailman/listinfo/genkernel-dev
+
+
+From trucker at genkernel.org  Fri Nov 16 20:51:23 2007
+From: trucker at genkernel.org (trucker at genkernel.org)
+Date: Fri, 16 Nov 2007 14:51:23 -0500
+Subject: [Genkernel-dev] [PATCH] Introduce an "install-to-prefix"
+Message-ID: <11952426831356-git-send-email-trucker@genkernel.org>
+
+From: Jean-Francois Richard <richard at walker.drap.polymtl.ca>
+
+Removes "intall-mod-path", "install-path" and "install-initramfs-path".
+
+install-path is now $install-to-prefix/$bootdir
+install-initramfs-path is now $install-to-prefix/$bootdir
+install-mod-path is now $install-to-prefix
+
+The default "install-to-prefix" is "/", but is changed with a warning if a user
+cannot write to it.  Then, it is set to be in the "$TEMP/out" directory of that
+user.
+
+Other fixes and additions :
+* The "--[no]-install" target is removed since anybody can install in a
+  temporary prefix somewhere.  Every default genkernel run now installs the
+  kernel, modules and initramfs.
+* Always uses a kbuild_output in the persistent user's "cache" (and not /tmp)
+  directory so multiple run of genkernel with "--no-mrproper" and "--no-clean"
+  will reuse the compiled objects.
+* Display size of main outputs (lib/, kernel, initramfs)
+---
+ trunk/TODO                              |   12 ++++-
+ trunk/core/gen_coreFunctions.sh         |   18 +------
+ trunk/core/gen_help_setup.sh            |    9 +--
+ trunk/core/gen_processKernelTree.sh     |   56 +++++++------------
+ trunk/doc/genkernel.8.txt               |   23 ++++----
+ trunk/genkernel                         |   24 ++++++---
+ trunk/modules/all.sh                    |   17 ++----
+ trunk/modules/initramfs.sh              |    7 +--
+ trunk/modules/initramfs_install.sh      |   47 +++++-----------
+ trunk/modules/kernel.sh                 |   11 +---
+ trunk/modules/kernel_config.sh          |    4 +-
+ trunk/modules/kernel_install.sh         |   89 ++++++++++++-------------------
+ trunk/modules/kernel_modules_cpio.sh    |    4 +-
+ trunk/modules/kernel_modules_install.sh |   54 +++++++------------
+ trunk/modules/links.sh                  |   47 +++--------------
+ 15 files changed, 151 insertions(+), 271 deletions(-)
+
+diff --git a/trunk/TODO b/trunk/TODO
+index 3ac16c2..c5ef4aa 100644
+--- a/trunk/TODO
++++ b/trunk/TODO
+@@ -1,6 +1,16 @@
+ Things to fix:
+ 
+-* Should cleanup TEMP and possibly other places before exiting?
++* [FIXED-jf] Should cleanup TEMP and possibly other places before exiting?
++  - $TEMP is cleaned up.
++  - the logfile is kept outside $TEMP so it is not deleted
++
++* dist files should be downloaded automatically
++  jf: the dist could be ... a dir in the cache, that symlinks every
++  file to the system dist/ files.  then downloads if needed 
++  automagic, no directory needed in the home dir of the user 
++  jf: it could maybe try the gentoo mirror for now
++
++
+ * cmdline kernel config parameter changing
+ 
+ * make some functions more generic .. ( not necessary right away but would be nice to get done )
+diff --git a/trunk/core/gen_coreFunctions.sh b/trunk/core/gen_coreFunctions.sh
+index 8e5352e..0343c71 100755
+--- a/trunk/core/gen_coreFunctions.sh
++++ b/trunk/core/gen_coreFunctions.sh
+@@ -64,9 +64,6 @@ cleanup(){
+         print_info 1 "CACHE_CPIO_DIR: ${CACHE_CPIO_DIR}"
+         CLEAR_CPIO_CACHE='yes'
+         clear_cpio_dir
+-        echo
+-        print_info 1 "TMPDIR: ${TMPDIR}"
+-        clear_tmpdir
+     fi
+ }
+ 
+@@ -238,7 +235,7 @@ clear_log() {
+ 	[ ! -w "$(profile_get_key debugfile)" ]  && DEBUGFILE="$(mktemp -t genkernel.log.XXXXXXXXXX)"
+ 
+ 	profile_set_key debugfile "${DEBUGFILE}"
+-	print_info 1 ">> Debug log: ${BOLD}$(profile_get_key debugfile) ${NORMAL}"
++	print_info 1 ">> Detailled log: ${BOLD}$(profile_get_key debugfile) ${NORMAL}"
+ }
+ 
+ die_debugged() {
+@@ -329,19 +326,6 @@ setup_cache_dir()
+ 	fi
+ }
+ 
+-clear_tmpdir()
+-{
+-	if ! logicTrue ${CMD_NOINSTALL}
+-	then
+-		TMPDIR_CONTENTS=`ls ${TMPDIR}`
+-		print_info 1 "Removing tmp dir contents"
+-		for i in ${TMPDIR_CONTENTS}
+-		do
+-			print_info 1 "	 >> Removing ${i}"
+-			rm ${TMPDIR}/${i}
+-		done
+-	fi
+-}
+ 
+ # subtract_from_list item list
+ subtract_from_list() {
+diff --git a/trunk/core/gen_help_setup.sh b/trunk/core/gen_help_setup.sh
+index 644f7ee..2b61545 100755
+--- a/trunk/core/gen_help_setup.sh
++++ b/trunk/core/gen_help_setup.sh
+@@ -102,18 +102,15 @@ __register_config_option 'Initramfs' 'unionfs' 'false' 'true' '' # Description e
+ ## ALL options
+ __register_config_option '"all::" target' 'initramfs' 'false' 'true' 'Build a initramfs'
+ profile_set_key initramfs true 'system'
+-__register_config_option '"all::" target' 'install' 'false' 'true' 'Install the kernel/initramfs to /boot after building.'
+-profile_set_key install true 'system'
+ 
+ ## Installation options
+-__register_config_option 'Install' 'install-initramfs-path' 'true' 'false' 'Destination of initramfs'
+-__register_config_option 'Install' 'install-path' 'true' 'false' 'Destination of kernel and initramfs'
+-__register_config_option 'Install' 'install-mod-path' 'true' 'false' 'Destination of kernel modules'
++__register_config_option 'Install' 'install-to-prefix' 'true' 'false' 'Destination prefix for initramfs, kernel and modules; default /.'
++profile_set_key install-to-prefix '/' 'system'
+ 
+ __register_config_option 'Install' 'setgrub' 'false' 'true' 'Setup the grub.conf file'
+ profile_set_key setgrub false 'system'
+ 
+-__register_config_option 'Install' 'links' 'false' 'true' 'Create symbolic links to the generated kernel and/or initramfs'
++__register_config_option 'Install' 'links' 'true' 'true' 'Create symbolic links to the generated kernel and/or initramfs'
+ profile_set_key links false 'system'
+ 
+ __register_config_option 'Install' 'mountboot' 'false' 'true' 'Mount /boot automatically.'
+diff --git a/trunk/core/gen_processKernelTree.sh b/trunk/core/gen_processKernelTree.sh
+index e91eded..15a3436 100644
+--- a/trunk/core/gen_processKernelTree.sh
++++ b/trunk/core/gen_processKernelTree.sh
+@@ -15,22 +15,11 @@ get_KV() {
+ 	then
+ 		KBUILD_OUTPUT="$(profile_get_key kbuild-output)"
+ 	else
+-		KBUILD_OUTPUT=${KERNEL_DIR}
++		KBUILD_OUTPUT="${CACHE_DIR}/kbuild_output"
++		mkdir -p ${KBUILD_OUTPUT}
+ 	fi
+ 
+-	if [ ! -w ${KBUILD_OUTPUT} ]
+-	then
+-		print_info 1 "Kernel: ${KBUILD_OUTPUT} not writeable; attempting to use ${TEMP}/kbuild_output"
+-		KBUILD_OUTPUT="${TEMP}/kbuild_output"
+-		if [ ! -w ${TEMP} ]
+-		then
+-			die "Could not write to ${KBUILD_OUTPUT}.  Set kbuild-output to a writeable directory or run as root"
+-		else
+-			mkdir -p ${KBUILD_OUTPUT} || die "Could not make ${KBUILD_OUTPUT}.  Set kbuild-output to a writeable directory or run as root"
+-		fi
+-	else
+-		mkdir -p ${KBUILD_OUTPUT} || die "Could not make ${KBUILD_OUTPUT}.  Set kbuild-output to a writeable directory or run as root"
+-	fi
++	[ ! -w ${KBUILD_OUTPUT} ] && "Could not write to ${KBUILD_OUTPUT}.  Set kbuild-output to a writeable directory or run as root"
+ 		
+ 	profile_set_key kbuild-output ${KBUILD_OUTPUT}
+     
+@@ -207,8 +196,8 @@ check_asm_link_ok() {
+ # this is mainly for setting integers, but the other kernel_config_set could be
+ # refactored to use it.
+ kernel_config_set_raw() {
+-	sed -i ${KBUILD_OUTPUT}/.config -e "s|#\? \?CONFIG_${1} is.*|CONFIG_${1}=${2}|g"
+-	sed -i ${KBUILD_OUTPUT}/.config -e "s|CONFIG_${1}=.*|CONFIG_${1}=${2}|g"
++	sed -i ${KBUILD_OUTPUT}/.config -e "s|#\? \?CONFIG_${1} is.*|CONFIG_${1}=${2}|g" 2>/dev/null
++	sed -i ${KBUILD_OUTPUT}/.config -e "s|CONFIG_${1}=.*|CONFIG_${1}=${2}|g" 2>/dev/null
+ 	if ! kernel_config_is_set ${1}
+ 	then
+ 		echo "CONFIG_${1}=${2}" >> ${KBUILD_OUTPUT}/.config
+@@ -223,8 +212,8 @@ kernel_config_set_string() {
+ 
+ kernel_config_set_builtin() {
+ 	# TODO need to check for null entry entirely
+-	sed -i ${KBUILD_OUTPUT}/.config -e "s/CONFIG_${1}=m/CONFIG_${1}=y/g"
+-	sed -i ${KBUILD_OUTPUT}/.config -e "s/#\? \?CONFIG_${1} is.*/CONFIG_${1}=y/g"
++	sed -i ${KBUILD_OUTPUT}/.config -e "s/CONFIG_${1}=m/CONFIG_${1}=y/g" 2>/dev/null
++	sed -i ${KBUILD_OUTPUT}/.config -e "s/#\? \?CONFIG_${1} is.*/CONFIG_${1}=y/g" 2>/dev/null
+ 	if ! kernel_config_is_set ${1}
+ 	then
+ 		echo "CONFIG_${1}=y" >> ${KBUILD_OUTPUT}/.config
+@@ -233,8 +222,8 @@ kernel_config_set_builtin() {
+ 
+ kernel_config_set_module() {
+ 	# TODO need to check for null entry entirely
+-	sed -i ${KBUILD_OUTPUT}/.config -e "s/CONFIG_${1}=y/CONFIG_${1}=m/g"
+-	sed -i ${KBUILD_OUTPUT}/.config -e "s/#\? \?CONFIG_${1} is.*/CONFIG_${1}=m/g"
++	sed -i ${KBUILD_OUTPUT}/.config -e "s/CONFIG_${1}=y/CONFIG_${1}=m/g" 2>/dev/null
++	sed -i ${KBUILD_OUTPUT}/.config -e "s/#\? \?CONFIG_${1} is.*/CONFIG_${1}=m/g" 2>/dev/null
+ 	if ! kernel_config_is_set ${1}
+ 	then
+ 		echo "CONFIG_${1}=m" >> ${KBUILD_OUTPUT}/.config
+@@ -242,7 +231,7 @@ kernel_config_set_module() {
+ }
+ 
+ kernel_config_unset() {
+-	sed -i "${KBUILD_OUTPUT}"/.config -e "s/CONFIG_${1}=.*/# CONFIG_${1} is not set/g"
++	sed -i "${KBUILD_OUTPUT}"/.config -e "s/CONFIG_${1}=.*/# CONFIG_${1} is not set/g" 2>/dev/null
+ }
+ 
+ # you should check kernel_config_is_set before trusting this, beware
+@@ -288,24 +277,21 @@ determine_config_file() {
+ 	# echo "${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}"
+ 	# echo "${CONFIG_DIR}/kernel-config"
+ 
+-	if [ -n "$(profile_get_key kernel-config)" ]
+-	then
++	if [ -n "$(profile_get_key kernel-config)" ];then
+ 		KERNEL_CONFIG="$(profile_get_key kernel-config)"
+-	elif [ -f "/etc/kernels/kernel-config-${KV_FULL}" ]
+-	then
+-		KERNEL_CONFIG="/etc/kernels/kernel-config-${KV_FULL}"
+-	elif [ -f "${CONFIG_DIR}/kernel-config-${KV_FULL}" ]
+-	then
++
++	elif [ -f "${CONFIG_DIR}/kernel-config-${KV_FULL}" ]; then
+ 		KERNEL_CONFIG="${CONFIG_DIR}/kernel-config-${KV_FULL}"
+-	elif [ "${DEFAULT_KERNEL_CONFIG}" != "" -a -f "${DEFAULT_KERNEL_CONFIG}" ]
+-	then
++
++	elif [ "${DEFAULT_KERNEL_CONFIG}" != "" -a -f "${DEFAULT_KERNEL_CONFIG}" ]; then
+ 		KERNEL_CONFIG="${DEFAULT_KERNEL_CONFIG}"
+-	elif [ -f "${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}" ]
+-	then
++
++	elif [ -f "${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}" ]; then
+ 		KERNEL_CONFIG="${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}"
+-	elif [ -f "${CONFIG_DIR}/kernel-config" ]
+-	then
+-	KERNEL_CONFIG="${CONFIG_DIR}/kernel-config"
++
++	elif [ -f "${CONFIG_DIR}/kernel-config" ]; then
++	        KERNEL_CONFIG="${CONFIG_DIR}/kernel-config"
++
+ 	else
+ 		die 'Error: No kernel .config specified, or file not found!'
+ 	fi
+diff --git a/trunk/doc/genkernel.8.txt b/trunk/doc/genkernel.8.txt
+index 25fdb9a..06e71a1 100644
+--- a/trunk/doc/genkernel.8.txt
++++ b/trunk/doc/genkernel.8.txt
+@@ -282,21 +282,20 @@ all:: target
+ `--[no-]initramfs`::
+               Do not build a initramfs.
+ 
+-`--[no-]install`::
+-              Install or do not install the kernel/initramfs to /boot
+-              after building.
++`--[no-]links`::
++              Update the "kernel", "initramfs" and "System.map"
++              symlinks to point to the newly installed kernel,
++              initramfs and System.map
+ 
+-`--install-initramfs-path=<...>`::
+-              This option specifies an installation destination for
+-              the initramfs image.
+-
+-`--install-path=<...>`::
+-              This option specifies an installation destination for
+-              the initramfs image and the kernel.
++`--bootdir=<...>`::
++              Location of the boot-directory; default /boot.
+ 
+-`--install-mod-path=<...>`::
++`--install-to-prefix=<...>`::
+               This option specifies an installation destination for
+-              the kernel modules.
++              the kernel, initramfs and modules.  The kernel and
++              initramfs will be placed in this prefix with the
++              `bootdir` path appended.  The modules will typically be
++              placed in the lib/ directory.
+ 
+ `--[no-]setgroup`::
+               If enabled this option modifies the grub.conf settings
+diff --git a/trunk/genkernel b/trunk/genkernel
+index 68aaae0..03e4c75 100755
+--- a/trunk/genkernel
++++ b/trunk/genkernel
+@@ -56,7 +56,7 @@ SRCPKG_DIR="$GENKERNEL_HOME/dist"
+ FIXES_FILES_DIR="$GENKERNEL_HOME/fixes/files"
+ FIXES_PATCHES_DIR="$GENKERNEL_HOME/fixes/patches"
+ # Read-write stuff
+-CACHE_DIR="/var/tmp/genkernel-$USERNAME"
++CACHE_DIR="/var/tmp/gk-$USERNAME"
+ 
+ if [ -f /etc/genkernel/genkernel.conf ]
+ then
+@@ -128,12 +128,10 @@ profile_copy "user"
+ # Set TEMP
+ if [ -n "$(profile_get_key tempdir)" ]; then
+     TEMP="$(profile_get_key tempdir)"
+-    mkdir -p "${TEMP}" || die "Could not create temporary directory '${TEMP}'!"
+-    # remove the genkernel-output folder if it exists
+-    rm -r ${TEMP}/genkernel-output &> /dev/null
+-    [ ! -w "${TEMP}" ] die "Cannot have write access to temporary directory '${TEMP}'!"
++    mkdir -p "${TEMP}" 2>/dev/null
++    [ ! -w "${TEMP}" ] && die "Cannot have write access to temporary directory '${TEMP}'!"
+ else
+-    TEMP=$( mktemp -d -t genkernel.workdir.XXXXXXXXXX ) || die "Failed to create temporary directory!"
++    TEMP=$( mktemp -d -t gkwork.XXXXXXXXXX ) || die "Failed to create temporary directory!"
+ fi
+ 
+ set_color 
+@@ -168,7 +166,8 @@ mkdir -p "${CACHE_DIR}" &> /dev/null
+ if [ ! -w "${CACHE_DIR}" ]; then
+     print_warning 1 ">> CACHE_DIR: ${BOLD}${CACHE_DIR} ${NORMAL}is not writeable; attempting to use ${TEMP}/genkernel_cache/$(profile_get_key profile)"
+     CACHE_DIR="${TEMP}/genkernel_cache/$(profile_get_key profile)/"
+-    mkdir -p "${CACHE_DIR}"
++    mkdir -p "${CACHE_DIR}" 2>/dev/null
++    [ ! -w "${CACHE_DIR}" ] && die "Cannot have write access to cache directory '${CACHE_DIR}'!"
+ fi
+ 
+ genkernel_lookup_packages
+@@ -192,6 +191,17 @@ then
+ 	exit 1
+ fi
+ 
++# Check that the install-to-prefix points to something
++# sane for the user
++if [ ! -w "$(profile_get_key install-to-prefix)" ]; then
++    print_warning 1 "Cannot write to the install-to-prefix: $(profile_get_key install-to-prefix)"
++
++    profile_set_key install-to-prefix "${CACHE_DIR}/dest"
++    mkdir "$(profile_get_key install-to-prefix)" 2>/dev/null
++    [ ! -w "$(profile_get_key install-to-prefix)" ] && die "Cannot write to the install-to-prefix: $(profile_get_key install-to-prefix)"
++    print_warning 1 "The install-to-prefix will be:"
++    print_warning 1 "   $(profile_get_key install-to-prefix)"
++fi
+ 
+ 
+ # Process depends
+diff --git a/trunk/modules/all.sh b/trunk/modules/all.sh
+index 534969c..06142d2 100644
+--- a/trunk/modules/all.sh
++++ b/trunk/modules/all.sh
+@@ -1,20 +1,13 @@
+-if logicTrue $(profile_get_key install) && logicTrue $(profile_get_key mountboot)
+-then
+-	require mount_boot
+-fi
+-
++logicTrue $(profile_get_key mountboot) && require mount_boot
+ require kernel
+-
+ logicTrue $(initramfs) && require initramfs
+-
+-if logicTrue $(profile_get_key install) 
+-then
+-	logicTrue $(profile_get_key links) && require links
+-	logicTrue $(profile_get_key setgrub) && require grub
+-fi
++logicTrue $(profile_get_key links) && require links
++logicTrue $(profile_get_key setgrub) && require grub
+ 
+ all::() { 
+ 
++print_info 1 ">> The output files were placed in:"
++print_info 1 "   ${BOLD}$(profile_get_key install-to-prefix)${NORMAL}"
+ 
+ cfg_register_read
+ kernel_cmdline_register_read
+diff --git a/trunk/modules/initramfs.sh b/trunk/modules/initramfs.sh
+index 0adcfac..bca0c07 100644
+--- a/trunk/modules/initramfs.sh
++++ b/trunk/modules/initramfs.sh
+@@ -1,9 +1,4 @@
+-if logicTrue $(profile_get_key install)
+-then
+-	require initramfs_install
+-else
+-	require initramfs_create
+-fi
++require initramfs_install
+ 
+ kernel_cmdline_register 'root=/dev/ram0 real_root=/dev/$ROOT init=/linuxrc'
+ kernel_cmdline_register ''
+diff --git a/trunk/modules/initramfs_install.sh b/trunk/modules/initramfs_install.sh
+index 5ad1a3f..9660af8 100644
+--- a/trunk/modules/initramfs_install.sh
++++ b/trunk/modules/initramfs_install.sh
+@@ -1,39 +1,20 @@
+ require initramfs_create
+ 
+ initramfs_install::() {
+-	# Set up a few globals
+-	# Set the destination path for the initramfs
+-	if ! logicTrue $(profile_get_key internal-initramfs)
+-	then
+-		if [ -z "$(profile_get_key install-initramfs-path)" ]
+-		then
+-	    		profile_set_key install-initramfs-path "$(profile_get_key bootdir)"
+-		fi
+ 
+-		if [ -w $(dirname $(profile_get_key install-initramfs-path)) ]
+-		then
+-	    		mkdir -p $(profile_get_key install-initramfs-path) || \
+-	       		die "Could not make $(profile_get_key install-initramfs-path).  Set $(profile_get_key install-initramfs-path) to a writeable directory or run as root"
+-		else
+-    		print_info 1 ">> Initramfs install path:
+-            ${BOLD}$(profile_get_key install-initramfs-path) ${NORMAL}is not writeable, attempting to use ${TEMP}/genkernel-output/boot"
+-    			if [ ! -w ${TEMP} ]
+-    			then
+-    		   	 	die "Could not write to ${TEMP}/genkernel-output.  Set install-initramfs-path to a writeable directory or run as root"
+-    			else
+-        			mkdir -p ${TEMP}/genkernel-output/boot || die "Could not make ${TEMP}/genkernel-output/boot.  Set install-initramfs-path to a writeable directory or run as root"
+-        			profile_set_key install-initramfs-path "${TEMP}/genkernel-output/boot"
+-    			fi
+-		fi
+-	fi
++    local INSTO ARGS KNAME
++    
++    INSTO="$(profile_get_key install-to-prefix)$(profile_get_key bootdir)"
++    mkdir -p "${INSTO}" &> /dev/null
++    [ ! -w "${INSTO}" ] && die "Could not write to ${INSTO}.  Set install-to-prefix/bootdir to a writeable directory or run as root."
+ 
+-	local ARGS KNAME
+-	if logicTrue $(profile_get_key internal-initramfs)
+-	then
+-		print_info 1 "Skipping installation of the initramfs: --initramfs-internal enabled"
+-	else
+-		[ "$(profile_get_key debuglevel)" -gt "1" ] && ARGS="-v"
+-		print_info 1 ">> Installing initramfs to $(profile_get_key install-initramfs-path)/initramfs-${KV_FULL}"
+-		cp ${ARGS} "${TEMP}/initramfs-output.cpio.gz" "$(profile_get_key install-initramfs-path)/initramfs-${KV_FULL}"
+-	fi
++    if logicTrue $(profile_get_key internal-initramfs); then
++	print_info 1 "Skipping installation of the initramfs: --initramfs-internal enabled"
++    else
++	[ "$(profile_get_key debuglevel)" -gt "1" ] && ARGS="-v"
++	cp ${ARGS} "${TEMP}/initramfs-output.cpio.gz" "${INSTO}/initramfs-${KV_FULL}"
++	print_info 1 ">> initramfs installed in ${BOLD}${INSTO}${NORMAL}"
++	cd "${INSTO}"
++	print_info 1 "$( du -h initramfs-${KV_FULL} )"
++    fi
+ }
+diff --git a/trunk/modules/kernel.sh b/trunk/modules/kernel.sh
+index f1a4e61..c19273a 100644
+--- a/trunk/modules/kernel.sh
++++ b/trunk/modules/kernel.sh
+@@ -1,12 +1,5 @@
+-if logicTrue $(profile_get_key install)
+-then
+-	require kernel_install
+-	require kernel_modules_install
+-else
+-	require kernel_compile
+-	require kernel_modules_compile
+-fi
+-
++require kernel_install
++require kernel_modules_install
+ 
+ if ! logicTrue $(initramfs)
+ then
+diff --git a/trunk/modules/kernel_config.sh b/trunk/modules/kernel_config.sh
+index bde2b35..41a9e90 100644
+--- a/trunk/modules/kernel_config.sh
++++ b/trunk/modules/kernel_config.sh
+@@ -62,10 +62,10 @@ kernel_config::()
+ 	then
+ 		print_info 1 'kernel configure: >> Running clean...' 
+ 		compile_generic ${KERNEL_ARGS} clean
+-    fi
++	fi
+ 
+ 	if logicTrue $(profile_get_key gentoo-config)
+-    then
++	then
+ 	    determine_config_file
+ 		print_info 1 "${PRINT_PREFIX}Using default genkernel config from ${KERNEL_CONFIG}"
+ 		print_info 1 '        Previous config backed up to .config.bak'
+diff --git a/trunk/modules/kernel_install.sh b/trunk/modules/kernel_install.sh
+index 221d326..d1f3a28 100644
+--- a/trunk/modules/kernel_install.sh
++++ b/trunk/modules/kernel_install.sh
+@@ -2,59 +2,40 @@ require kernel_compile
+ 
+ kernel_install::()
+ {
+-	# Set up some globals
+-	# Set the destination path for the kernel
+-	if [ -z "$(profile_get_key install-path)" ]
+-	then
+-		profile_set_key install-path "$(profile_get_key bootdir)"
+-	fi
+-
+-	if [ -w $(dirname $(profile_get_key install-path)) ]
+-	then
+-		mkdir -p $(profile_get_key install-path) || \
+-			die "Could not make $(profile_get_key install-path).  Set $(profile_get_key install-path) to a writeable directory or run as root"
+-	else
+-		print_info 1 ">> Kernel install path: ${BOLD}$(profile_get_key install-path) ${NORMAL}is not writeable, attempting to use ${TEMP}/genkernel-output"
+-		if [ ! -w ${TEMP} ]
+-		then
+-			die "Could not write to ${TEMP}/genkernel-output.  Set install-path to a writeable directory or run as root"
+-		else
+-			mkdir -p ${TEMP}/genkernel-output/boot || die "Could not make ${TEMP}/genkernel-output/boot/.  Set install-path to a writeable directory or run as root"
+-			profile_set_key install-path "${TEMP}/genkernel-output/boot/"
+-		fi
+-	fi
+-	KERNEL_ARGS="${KERNEL_ARGS} INSTALL_PATH=$(profile_get_key install-path)"
+-
+-	local CP_ARGS KNAME
+-
+-	KNAME="$(profile_get_key kernel-name)"
+-	
+-	setup_kernel_args
+-	cd "$(profile_get_key kbuild-output)"
+-
+-	print_info 1 '>> Installing kernel ...'
+-
+-	[ "$(profile_get_key debuglevel)" -gt "1" ] && CP_ARGS="-v"
+-	[ "$(profile_get_key debuglevel)" -gt "1" ] &&\
+-		print_info 1 ">> Installing kernel to $(profile_get_key install-path)/kernel-${KV_FULL}"
+-	cp ${CP_ARGS} "$(profile_get_key kernel-binary)" "$(profile_get_key install-path)/kernel-${KV_FULL}"
+-	cp ${CP_ARGS} "System.map" "$(profile_get_key install-path)/System.map-${KV_FULL}"
+-
+-	if [ -w /etc/kernels ]
+-	then
+-		profile_set_key kernel-config-destination-path "/etc/kernels"
+-	else
+-		print_info 1 ">> Kernel config install path: ${BOLD}/etc/kernels${NORMAL} is not writeable attempting to use ${TEMP}/genkernel-output"
+-		if [ ! -w ${TEMP} ]
+-		then
+-			die "Could not write to ${TEMP}/genkernel-output."
+-		else
+-			mkdir -p ${TEMP}/genkernel-output/etc/kernels || die "Could not make ${TEMP}/genkernel-output."
+-			profile_set_key kernel-config-destination-path "${TEMP}/genkernel-output/etc/kernels"
+-		fi
+-	fi
+-	
+-	cp .config "$(profile_get_key kernel-config-destination-path)/kernel-config-${KV_FULL}"
+-	print_info 1 "Kernel config file saved to $(profile_get_key kernel-config-destination-path)/kernel-config-${KV_FULL}"
++    local INSTO CP_ARGS KNAME
+ 
++    INSTO="$(profile_get_key install-to-prefix)$(profile_get_key bootdir)"
++    mkdir -p "${INSTO}" &> /dev/null
++    [ ! -w "${INSTO}" ] && die "Could not write to ${INSTO}.  Set install-to-prefix/bootdir to a writeable directory or run as root."
++
++    
++    KERNEL_ARGS="${KERNEL_ARGS} INSTALL_PATH=${INSTO}"
++
++    KNAME="$(profile_get_key kernel-name)"
++    setup_kernel_args
++
++    cd "$(profile_get_key kbuild-output)"
++
++    print_info 1 '>> Installing kernel ...'
++
++    [ "$(profile_get_key debuglevel)" -gt "1" ] && CP_ARGS="-v"
++
++    cp ${CP_ARGS} "$(profile_get_key kernel-binary)" "${INSTO}/kernel-${KV_FULL}"
++    cp ${CP_ARGS} "System.map" "${INSTO}/System.map-${KV_FULL}"
++    print_info 1 "Kernel installed in ${BOLD}${INSTO}${NORMAL} :"
++
++    cd "${INSTO}"
++    print_info 1 "$( du -h kernel-${KV_FULL} )"
++    print_info 1 "$( du -h System.map-${KV_FULL} )"
++    cd - &>/dev/null
++
++    if [ -w "/etc/kernels" ]; then
++	print_info 1 "Kernel config saved to:"
++	print_info 1 "   ${BOLD}/etc/kernels/kernel-${KV_FULL}.config${NORMAL}"
++	cp ${CP_ARGS} .config "/etc/kernels/kernel-${KV_FULL}.config"
++    else
++	print_info 1 "Kernel config saved to:"
++	print_info 1 "   ${BOLD}${INSTO}/kernel-${KV_FULL}.config${NORMAL}"
++	cp ${CP_ARGS} .config "${INSTO}/kernel-${KV_FULL}.config"
++    fi
+ }
+diff --git a/trunk/modules/kernel_modules_cpio.sh b/trunk/modules/kernel_modules_cpio.sh
+index 3214e27..c52fc1c 100644
+--- a/trunk/modules/kernel_modules_cpio.sh
++++ b/trunk/modules/kernel_modules_cpio.sh
+@@ -6,7 +6,7 @@ kernel_modules_cpio::()
+ 		print_info 1 ">> Modules not enabled in .config... skipping modules compile"
+ 	else
+ 		MOD_EXT=".ko"
+-		INSTALL_MOD_PATH="$(profile_get_key install-mod-path)"
++		INSTALL_MOD_PATH="$(profile_get_key install-to-prefix)"
+ 		
+ 		print_info 2 "initramfs: >> Searching for modules..."
+ 
+@@ -32,7 +32,7 @@ kernel_modules_cpio::()
+ 			cp -ax --parents "${mymod}" "${TEMP}/initramfs-modules-${KV_FULL}-temp"
+ 		done
+ 
+-		if [ -f "$(profile_get_key install-mod-path)"/lib/modules/${KV_FULL}/modules.dep ]
++		if [ -f "$(profile_get_key install-to-prefix)"/lib/modules/${KV_FULL}/modules.dep ]
+ 		then
+ 			print_info 2 "Copying modules.dep into the initramfs"
+ 			cp -ax --parents "./lib/modules/${KV_FULL}/modules.dep" "${TEMP}/initramfs-modules-${KV_FULL}-temp/"
+diff --git a/trunk/modules/kernel_modules_install.sh b/trunk/modules/kernel_modules_install.sh
+index 7c7ff57..0d28f89 100644
+--- a/trunk/modules/kernel_modules_install.sh
++++ b/trunk/modules/kernel_modules_install.sh
+@@ -2,42 +2,26 @@ require kernel_modules_compile
+ 
+ kernel_modules_install::()
+ {
+-	# Set a few globals up
+-	# Set the destination path for the kernel modules
+-	if [ -z "$(profile_get_key install-mod-path)" ]
+-	then
+-	    profile_set_key install-mod-path "/"
+-	fi
++    local INSTO
+ 
+-	if [ -w $(dirname $(profile_get_key install-mod-path)) ]
+-	then
+-	    mkdir -p $(profile_get_key install-mod-path) || \
+-	        die "Could not make $(profile_get_key install-mod-path).  Set $(profile_get_key install-mod-path) to a writeable directory or run as root"
+-	else
+-	    print_info 1 ">> Kernel modules install path: ${BOLD}$(profile_get_key install-mod-path) ${NORMAL}is not writeable, attempting to use ${TEMP}/genkernel-output"
+-	    if [ ! -w ${TEMP} ]
+-	    then
+-	        die "Could not write to ${TEMP}/genkernel-output.  Set install-mod-path to a writeable directory or run as root"
+-	    else
+-	        mkdir -p ${TEMP}/genkernel-output || die "Could not make ${TEMP}/genkernel-output.  Set install-mod-path to a writeable directory or run as root"
+-	        profile_set_key install-mod-path "${TEMP}/genkernel-output"
+-	    fi
+-	fi
++    INSTO="$(profile_get_key install-to-prefix)"
++    mkdir -p "${INSTO}" &> /dev/null
++    [ ! -w "${INSTO}" ] && die "Could not write to ${INSTO}.  Set install-to-prefix to a writeable directory or run as root."
+ 
+-	if kernel_config_is_not_set "MODULES"
+-	then
+-		print_info 1 ">> Modules not enabled in .config... skipping modules install"
+-	else
++    if kernel_config_is_not_set "MODULES"; then
++	print_info 1 ">> Modules not enabled in .config... skipping modules install"
++    else
++	setup_kernel_args
++	KERNEL_ARGS="${KERNEL_ARGS} INSTALL_MOD_PATH=${INSTO}"
++	
++	cd $(profile_get_key kernel-tree)
++	
++	# install the modules
++	print_info 1 '>> Installing kernel modules ...'
++	compile_generic ${KERNEL_ARGS} modules_install
++    fi
+ 
+-		setup_kernel_args
+-	    KERNEL_ARGS="${KERNEL_ARGS} INSTALL_MOD_PATH=$(profile_get_key install-mod-path)"
+-
+-		[ "$(profile_get_key debuglevel)" -gt "1" ] && print_info 1 ">> Installing kernel modules to $(profile_get_key install-mod-path)"
+-
+-		cd $(profile_get_key kernel-tree)
+-
+-		# install the modules
+-		print_info 1 '>> Installing kernel modules ...'
+-		compile_generic ${KERNEL_ARGS} modules_install
+-	fi
++    print_info 1 "Kernel modules installed in ${BOLD}${INSTO}${NORMAL}"
++    cd "${INSTO}"
++    print_info 1 "$(du -sch --no-dereference lib | tail -n1)"
+ }
+diff --git a/trunk/modules/links.sh b/trunk/modules/links.sh
+index 6ea1834..ff28c49 100644
+--- a/trunk/modules/links.sh
++++ b/trunk/modules/links.sh
+@@ -5,47 +5,14 @@ links::()
+ {
+ 	local ARGS CP_ARGS KNAME BOOTDIR
+ 
+-	BOOTDIR="$(profile_get_key bootdir)"
+-	KNAME="$(profile_get_key kernel-name)"
+-	if logicTrue $(profile_get_key install)
+-	then
+-		# link to the kernel
+-		print_info 1 ">> Creating link to kernel"
+-		if [ -n "$(profile_get_key install-path)" ]
+-		then
+-			print_info 1 ">> Creating link from $(profile_get_key install-path)/kernel-${KV_FULL} to $(profile_get_key install-path)/kernel"
+-			ln -sf "$(profile_get_key install-path)/kernel-${KV_FULL}" "$(profile_get_key install-path)/kernel"
+-
+-		else
+-			print_info 1 ">> Creating link from ${BOOTDIR}/kernel-${KV_FULL} to ${BOOTDIR}/kernel"
+-			ln -sf "${BOOTDIR}/kernel-${KV_FULL}" "${BOOTDIR}/kernel"
+-		fi
+-
+-		# link to System.map
+-		print_info 1 ">> Creating link to System.map"
+-		if [ -n "$(profile_get_key install-path)" ]
+-		then
+-			print_info 1 ">> Creating link from $(profile_get_key install-path)/System.map-${KV_FULL} to $(profile_get_key install-path)/System.map"
+-			ln -sf "$(profile_get_key install-path)/System.map-${KV_FULL}" "$(profile_get_key install-path)/System.map"
+-
+-		else
+-			print_info 1 ">> Creating link from ${BOOTDIR}/System.map-${KV_FULL} to ${BOOTDIR}/System.map"
+-			ln -sf "${BOOTDIR}/System.map-${KV_FULL}" "${BOOTDIR}/System.map"
+-		fi
+-
+-		# link to the initramfs
+-		if logicTrue $(external_initramfs)
+-		then
+-			if [ -n "$(profile_get_key install-initramfs-path)" ]
+-			then
+-				print_info 1 ">> Creating link from $(profile_get_key install-initramfs-path)/initramfs-${KV_FULL} to $(profile_get_key install-initramfs-path)/initramfs"
+-				ln -sf "$(profile_get_key install-initramfs-path)/initramfs-${KV_FULL}" "$(profile_get_key install-initramfs-path)/initramfs"
+-			else
+-				print_info 1 ">> Creating link from ${BOOTDIR}/initramfs-${KV_FULL} to ${BOOTDIR}/initramfs"
+-				ln -sf "${BOOTDIR}/initramfs-${KV_FULL}" "${BOOTDIR}/initramfs"
+-			fi
++	cd "$(profile_get_key install-to-prefix)$(profile_get_key bootdir)"
++	if logicTrue $(profile_get_key links)
++	    for i in kernel initramfs System.map; do
++		if [ -e "${i}-${KV_FULL}" ]; then
++		    ln -sf "${i}-${KV_FULL}" "${i}"
+ 		fi
++	    done
+ 	else
+-		print_info 1 "Skipping link creation: --no-install enabled"
++	    print_info 1 "Skipping link creation: --no-install enabled"
+ 	fi
+ }
+-- 
+1.5.2.5
+
+
+
+From trucker at genkernel.org  Fri Nov 16 22:14:43 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Fri, 16 Nov 2007 16:14:43 -0500
+Subject: [Genkernel-dev] [PATCH] Use the running kernel config automatically
+Message-ID: <11952476832304-git-send-email-trucker@genkernel.org>
+
+From: Jean-Francois Richard <richard at walker.drap.polymtl.ca>
+
+It will now find the kernel configuration in this order:
+  1) /etc/kernels
+  2) /proc/config.gz
+  3) gk-shipped
+  4) defaults
+---
+ trunk/core/gen_processKernelTree.sh |   48 ++++++++++++++++++++--------------
+ trunk/modules/kernel_config.sh      |   48 ++++++++++++----------------------
+ 2 files changed, 45 insertions(+), 51 deletions(-)
+
+diff --git a/trunk/core/gen_processKernelTree.sh b/trunk/core/gen_processKernelTree.sh
+index 15a3436..eb52de9 100644
+--- a/trunk/core/gen_processKernelTree.sh
++++ b/trunk/core/gen_processKernelTree.sh
+@@ -270,31 +270,39 @@ kernel_config_is_not_set() {
+ 
+ 
+ determine_config_file() {
+-	# echo "$(profile_get_key kernel-config)"
+-	# echo "/etc/kernels/kernel-config-${ARCH}-${KV_FULL}"
+-	# echo "${CONFIG_DIR}/kernel-config-${KV_FULL}"
+-	# echo "${DEFAULT_KERNEL_CONFIG}"
+-	# echo "${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}"
+-	# echo "${CONFIG_DIR}/kernel-config"
+ 
+-	if [ -n "$(profile_get_key kernel-config)" ];then
+-		KERNEL_CONFIG="$(profile_get_key kernel-config)"
++    rm "${TEMP}/from-running-system.config" 2>/dev/null
+ 
+-	elif [ -f "${CONFIG_DIR}/kernel-config-${KV_FULL}" ]; then
+-		KERNEL_CONFIG="${CONFIG_DIR}/kernel-config-${KV_FULL}"
+-
+-	elif [ "${DEFAULT_KERNEL_CONFIG}" != "" -a -f "${DEFAULT_KERNEL_CONFIG}" ]; then
+-		KERNEL_CONFIG="${DEFAULT_KERNEL_CONFIG}"
++    if [ -f "/proc/config.gz" ]; then
++	zcat /proc/config.gz > "${TEMP}/from-running-system.config" 2> /dev/null
++	logicTrue $(profile_get_key running-kernel-config) && \\
++	    profile_set_key kernel-config "${TEMP}/from-running-system.config"
++    else
++	logicTrue $(profile_get_key running-kernel-config) && \
++            die 'Error: /proc/config.gz is not found.  Running-kernel-config failed!'
++    fi
+ 
+-	elif [ -f "${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}" ]; then
+-		KERNEL_CONFIG="${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}"
++    if [ -n "$(profile_get_key kernel-config)" ]; then
++	KERNEL_CONFIG="$(profile_get_key kernel-config)"
++	
++    elif [ -f "/etc/kernels/kernel-config-${KV_FULL}" ]; then
++	KERNEL_CONFIG="/etc/kernels/kernel-config-${KV_FULL}"
+ 
+-	elif [ -f "${CONFIG_DIR}/kernel-config" ]; then
+-	        KERNEL_CONFIG="${CONFIG_DIR}/kernel-config"
++    elif [ -f "${TEMP}/from-running-system.config" ]; then
++	KERNEL_CONFIG="${TEMP}/from-running-system.config"
+ 
+-	else
+-		die 'Error: No kernel .config specified, or file not found!'
+-	fi
++    elif [ -f "${CONFIG_DIR}/kernel-config-${KV_FULL}" ]; then
++	KERNEL_CONFIG="${CONFIG_DIR}/kernel-config-${KV_FULL}"
++	
++    elif [ -f "${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}" ]; then
++	KERNEL_CONFIG="${CONFIG_DIR}/kernel-config-${KV_MAJOR}.${KV_MINOR}"
++	
++    elif [ -f "${CONFIG_DIR}/kernel-config" ]; then
++	KERNEL_CONFIG="${CONFIG_DIR}/kernel-config"
++	
++    else
++	die 'Error: No kernel .config specified, or file not found!'
++    fi
+ }
+ 
+ kbuild_enabled() {
+diff --git a/trunk/modules/kernel_config.sh b/trunk/modules/kernel_config.sh
+index 41a9e90..73db9ea 100644
+--- a/trunk/modules/kernel_config.sh
++++ b/trunk/modules/kernel_config.sh
+@@ -30,15 +30,15 @@ kernel_config::()
+ 	then
+             
+ 		    print_info 1 '>> Cleaning kernel source tree...'
+-            print_info 1 '   Run "make mrproper" as root if this fails'
+-			compile_generic mrproper
++		    print_info 1 '   Run "make mrproper" as root if this fails'
++		    compile_generic mrproper
+ 
+             if [ -f "$(profile_get_key kernel-tree)/localversion-genkernel" ]
+             then
+                 rm -f "$(profile_get_key kernel-tree)/localversion-genkernel" >/dev/null 2>&1
+                 if [ -f "$(profile_get_key kernel-tree)/localversion-genkernel" ]
+                 then
+-			        die "Could not remove localversion-genkernel from the Kernel source tree. Please remove it manually."
++		    die "Could not remove localversion-genkernel from the Kernel source tree. Please remove it manually."
+                 fi
+             fi
+ 	fi
+@@ -64,35 +64,13 @@ kernel_config::()
+ 		compile_generic ${KERNEL_ARGS} clean
+ 	fi
+ 
+-	if logicTrue $(profile_get_key gentoo-config)
+-	then
+-	    determine_config_file
+-		print_info 1 "${PRINT_PREFIX}Using default genkernel config from ${KERNEL_CONFIG}"
+-		print_info 1 '        Previous config backed up to .config.bak'
+-		cp "${KERNEL_CONFIG}" "${KBUILD_OUTPUT}/.config" ||\
+-			die 'Could not copy configuration file!'
+-	fi
+-
+-	#use the running kernel config
+-	if logicTrue $(profile_get_key running-kernel-config)
+-	then
+-		print_info 1 "${PRINT_PREFIX}>> Getting config from the running system..."
+-        if [ -f "/proc/config.gz" ]
+-        then
+-		    zcat /proc/config.gz > "${KBUILD_OUTPUT}/.config"
+-		    [ "$?" ] || die 'Error: running-kernel-config failed!'
+-        else
+-            die 'Error: /proc/config.gz is not found.  Running-kernel-config failed!'
+-        fi
+-	fi
+ 	
+-    # When to run oldconfig
+-	if logicTrue $(profile_get_key oldconfig)
+-	then
+-		print_info 1 "${PRINT_PREFIX}>> Running oldconfig..."
+-		yes '' 2>/dev/null | compile_generic ${KERNEL_ARGS} oldconfig
+-		[ "$?" ] || die 'Error: oldconfig failed!'
+-	fi
++	determine_config_file
++	print_info 1 "${PRINT_PREFIX}Using kernel config from ${KERNEL_CONFIG}"
++	cp "${KERNEL_CONFIG}" "$(profile_get_key kbuild-output)/.config" ||\
++	    die 'Could not copy configuration file!'
++
++	cd "$(profile_get_key kbuild-output)"
+ 	
+ 	if logicTrue $(profile_get_key clean)
+ 	then
+@@ -199,6 +177,14 @@ kernel_config::()
+ 		yes '' 2>/dev/null | compile_generic ${KERNEL_ARGS} oldconfig
+ 	fi
+ 
++
++        # Run oldconfig now... if nothing was configured at least
++        # we end up in a good state; else it won't change anything
++	print_info 1 "${PRINT_PREFIX}>> Final pass at oldconfig to make sure everything is OK..."
++	yes '' 2>/dev/null | compile_generic ${KERNEL_ARGS} oldconfig
++	[ "$?" ] || die 'Error: silentoldconfig failed!'
++
++
+ 	compile_generic ${KERNEL_ARGS} prepare
+ 	if [ "$(kernel_config_get "MODULES")" = 'yes' ]; then
+ 		compile_generic ${KERNEL_ARGS} modules_prepare
+-- 
+1.5.2.5
+
+
+
+From trucker at genkernel.org  Fri Nov 16 22:37:43 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Fri, 16 Nov 2007 16:37:43 -0500
+Subject: [Genkernel-dev] [PATCH] dist/ directory in user's cache
+Message-ID: <1195249063581-git-send-email-trucker@genkernel.org>
+
+A dist/ directory is created in the user's cache.  The directory is
+populated with symlinks to the distributed packages.
+
+This change gives write access to the dist/ directory by users, paving
+the way for automatic downloads of needed packages from genkernel.org.
+---
+ trunk/TODO                     |   12 ++----------
+ trunk/genkernel                |   22 +++++++++++++++++++---
+ trunk/modules/kernel_config.sh |    6 ++----
+ 3 files changed, 23 insertions(+), 17 deletions(-)
+
+diff --git a/trunk/TODO b/trunk/TODO
+index c5ef4aa..1c3c160 100644
+--- a/trunk/TODO
++++ b/trunk/TODO
+@@ -1,15 +1,7 @@
+ Things to fix:
+ 
+-* [FIXED-jf] Should cleanup TEMP and possibly other places before exiting?
+-  - $TEMP is cleaned up.
+-  - the logfile is kept outside $TEMP so it is not deleted
+-
+-* dist files should be downloaded automatically
+-  jf: the dist could be ... a dir in the cache, that symlinks every
+-  file to the system dist/ files.  then downloads if needed 
+-  automagic, no directory needed in the home dir of the user 
+-  jf: it could maybe try the gentoo mirror for now
+-
++* Put up an http://genkernel.org/dist/ repository, and auto-download
++  the need files to local cache if needed
+ 
+ * cmdline kernel config parameter changing
+ 
+diff --git a/trunk/genkernel b/trunk/genkernel
+index 03e4c75..25415ba 100755
+--- a/trunk/genkernel
++++ b/trunk/genkernel
+@@ -112,9 +112,6 @@ done
+ profile_copy cmdline "user"
+ 
+ determine_profile
+-
+-# We now know the profile so set default CACHE_DIR and CONFIG_DIR
+-CACHE_DIR="${CACHE_DIR}/$(profile_get_key profile)"
+ CONFIG_DIR="${CONFIG_DIR}/$(profile_get_key profile)"
+ 
+ # setup the systems profile and copy it into the running profile
+@@ -160,6 +157,7 @@ fi
+ clear_log
+ genkernel_print_header
+ 
++
+ # FIXME: Needs to be absolute path
+ mkdir -p "${CACHE_DIR}" &> /dev/null
+ 
+@@ -170,6 +168,24 @@ if [ ! -w "${CACHE_DIR}" ]; then
+     [ ! -w "${CACHE_DIR}" ] && die "Cannot have write access to cache directory '${CACHE_DIR}'!"
+ fi
+ 
++# Symlink dist files to the user's cache, so we can 
++# download needed files to it eventually
++mkdir -p "${CACHE_DIR}/dist" 2>/dev/null
++[ ! -w "${CACHE_DIR}/dist" ] && \
++    die "Cannot have write access to dist cache directory '${CACHE_DIR}/dist'!"
++for i in "${SRCPKG_DIR}/"*; do
++    ln -sf "${i}" "${CACHE_DIR}/dist"
++done
++SRCPKG_DIR="${CACHE_DIR}/dist"
++
++# Final cache dir is set to be profile-related
++# 
++mkdir -p "${CACHE_DIR}/$(profile_get_key profile)" 2>/dev/null
++[ ! -w "${CACHE_DIR}/$(profile_get_key profile)" ] && \
++    die "Cannot have write access to profile cache directory '${CACHE_DIR}/$(profile_get_key profile)'!"
++CACHE_DIR="${CACHE_DIR}/$(profile_get_key profile)"
++
++
+ genkernel_lookup_packages
+ genkernel_lookup_kernel
+ 
+diff --git a/trunk/modules/kernel_config.sh b/trunk/modules/kernel_config.sh
+index 73db9ea..46044f2 100644
+--- a/trunk/modules/kernel_config.sh
++++ b/trunk/modules/kernel_config.sh
+@@ -70,8 +70,6 @@ kernel_config::()
+ 	cp "${KERNEL_CONFIG}" "$(profile_get_key kbuild-output)/.config" ||\
+ 	    die 'Could not copy configuration file!'
+ 
+-	cd "$(profile_get_key kbuild-output)"
+-	
+ 	if logicTrue $(profile_get_key clean)
+ 	then
+ 		print_info 1 'kernel configure: >> Running clean...' 
+@@ -79,7 +77,7 @@ kernel_config::()
+ 	else
+ 		print_info 1 "${PRINT_PREFIX}--no-clean is enabled; leaving the .config alone."	
+ 	fi
+-	
++
+ 	# Manual Configure
+ 	if logicTrue $(profile_get_key defconfig)
+ 	then
+@@ -182,7 +180,7 @@ kernel_config::()
+         # we end up in a good state; else it won't change anything
+ 	print_info 1 "${PRINT_PREFIX}>> Final pass at oldconfig to make sure everything is OK..."
+ 	yes '' 2>/dev/null | compile_generic ${KERNEL_ARGS} oldconfig
+-	[ "$?" ] || die 'Error: silentoldconfig failed!'
++	[ "$?" ] || die 'Error: oldconfig failed!'
+ 
+ 
+ 	compile_generic ${KERNEL_ARGS} prepare
+-- 
+1.5.2.5
+
+
+
+From trucker at genkernel.org  Sun Nov 25 03:22:54 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Sat, 24 Nov 2007 21:22:54 -0500
+Subject: [Genkernel-dev] [PATCH] Tool to build from a git kernel tree
+Message-ID: <1195957374-14169-1-git-send-email-trucker@genkernel.org>
+
+This tool checks out a particular tag in a given git kernel tree, then
+launches genkernel on it.
+---
+ trunk/genkernel-from-git |   43 +++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 43 insertions(+), 0 deletions(-)
+ create mode 100755 trunk/genkernel-from-git
+
+diff --git a/trunk/genkernel-from-git b/trunk/genkernel-from-git
+new file mode 100755
+index 0000000..e8030ce
+--- /dev/null
++++ b/trunk/genkernel-from-git
+@@ -0,0 +1,43 @@
++#!/bin/bash
++
++script_name=$(basename $0)
++
++function usage() {
++    local e="$@"
++    if [ -n "$e" ]; then
++	echo 
++	echo Error: $@ >&2
++	echo
++    fi
++    echo "usage: " >&2
++    echo "  $script_name <kernel-tree-path> <version-tag> -- [genkernel options]" >&2
++    echo "  <version-tag> can be set to 'latest' to use the most recent tag" >&2
++    echo "example:"
++    echo "  $script_name ../linux.git latest -- --unionfs all::" >&2
++    exit 1
++}
++
++which git-checkout &>/dev/null || usage "Could not find Git tools in your path"
++which genkernel &>/dev/null || usage "Could not find 'genkernel' in your path"
++[ "$#" -lt "3" ] && usage
++[ "$3" != "--" ] && usage
++ktree="$1"
++ktag="$2"
++[ ! -d "$ktree/.git" ] && usage "The path specified for the kernel tree is not a Git directory."
++cd "$ktree"
++if [ "$ktag" != "latest" ]; then
++    [ "$(git-tag -l $ktag)" != "$ktag" ] && usage "The specified tag does not exist in the kernel git tree"
++else
++    ktag="$(git-tag | tail -n1 )"
++fi
++echo "Checking out tag '$ktag' in the kernel tree"
++git-checkout "$ktag" || exit 1
++
++
++shift
++shift
++shift
++# phew. alright now!
++
++echo "Running genkernel --kernel-tree='$ktree' $@"
++genkernel --kernel-tree="$ktree" $@
+-- 
+1.5.3.5.737.gdee1b
+
+
+
+From plasmaroo at genkernel.org  Sun Nov 25 03:27:21 2007
+From: plasmaroo at genkernel.org (Tim Yamin)
+Date: Sun, 25 Nov 2007 02:27:21 +0000
+Subject: [Genkernel-dev] [PATCH] Tool to build from a git kernel tree
+In-Reply-To: <1195957374-14169-1-git-send-email-trucker@genkernel.org>
+References: <1195957374-14169-1-git-send-email-trucker@genkernel.org>
+Message-ID: <792f5f410711241827q6fa72e70g614a071f50917774@mail.gmail.com>
+
+Looks cool, please commit this one. I'll try and get to the other
+patches soon! :-)
+
+Tim
+
+On Nov 25, 2007 2:22 AM, Jean-Francois Richard <trucker at genkernel.org> wrote:
+> This tool checks out a particular tag in a given git kernel tree, then
+> launches genkernel on it.
+> ---
+>  trunk/genkernel-from-git |   43 +++++++++++++++++++++++++++++++++++++++++++
+>  1 files changed, 43 insertions(+), 0 deletions(-)
+>  create mode 100755 trunk/genkernel-from-git
+>
+> diff --git a/trunk/genkernel-from-git b/trunk/genkernel-from-git
+> new file mode 100755
+> index 0000000..e8030ce
+> --- /dev/null
+> +++ b/trunk/genkernel-from-git
+> @@ -0,0 +1,43 @@
+> +#!/bin/bash
+> +
+> +script_name=$(basename $0)
+> +
+> +function usage() {
+> +    local e="$@"
+> +    if [ -n "$e" ]; then
+> +       echo
+> +       echo Error: $@ >&2
+> +       echo
+> +    fi
+> +    echo "usage: " >&2
+> +    echo "  $script_name <kernel-tree-path> <version-tag> -- [genkernel options]" >&2
+> +    echo "  <version-tag> can be set to 'latest' to use the most recent tag" >&2
+> +    echo "example:"
+> +    echo "  $script_name ../linux.git latest -- --unionfs all::" >&2
+> +    exit 1
+> +}
+> +
+> +which git-checkout &>/dev/null || usage "Could not find Git tools in your path"
+> +which genkernel &>/dev/null || usage "Could not find 'genkernel' in your path"
+> +[ "$#" -lt "3" ] && usage
+> +[ "$3" != "--" ] && usage
+> +ktree="$1"
+> +ktag="$2"
+> +[ ! -d "$ktree/.git" ] && usage "The path specified for the kernel tree is not a Git directory."
+> +cd "$ktree"
+> +if [ "$ktag" != "latest" ]; then
+> +    [ "$(git-tag -l $ktag)" != "$ktag" ] && usage "The specified tag does not exist in the kernel git tree"
+> +else
+> +    ktag="$(git-tag | tail -n1 )"
+> +fi
+> +echo "Checking out tag '$ktag' in the kernel tree"
+> +git-checkout "$ktag" || exit 1
+> +
+> +
+> +shift
+> +shift
+> +shift
+> +# phew. alright now!
+> +
+> +echo "Running genkernel --kernel-tree='$ktree' $@"
+> +genkernel --kernel-tree="$ktree" $@
+> --
+> 1.5.3.5.737.gdee1b
+
+
+From trucker at genkernel.org  Tue Nov 27 23:11:48 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Tue, 27 Nov 2007 17:11:48 -0500
+Subject: [Genkernel-dev] Using the UnionFS-patched kernel tree
+Message-ID: <52b8090f0711271411j61410cd2i11e2b52aabd67cfc@mail.gmail.com>
+
+The UnionFS team publishes a Git tree that contains all the UnionFS patches.
+
+The instructions to get it are available at
+http://www.filesystems.org/unionfs-git.html
+
+Once it is cloned to a directory, it is easy to build an UnionFS
+kernel simply by doing
+
+$ genkernel-from-git "path/to/kernel-with-unionfs.git" latest -- \
+  --install-to-prefix /home/bla/gkout
+  --menuconfig all::
+
+Since UnionFS will probably be included in the mainline kernel
+someday, it might be better to document the above instead of working
+on a gk module.  What is your opinion on this?
+
+Also, should the gk unionfs module be dropped?  It is currently
+"hard-deprecated".
+
+-- 
+Jean-Francois Richard
+
+
+From plasmaroo at genkernel.org  Tue Nov 27 23:13:43 2007
+From: plasmaroo at genkernel.org (Tim Yamin)
+Date: Tue, 27 Nov 2007 22:13:43 +0000
+Subject: [Genkernel-dev] Using the UnionFS-patched kernel tree
+In-Reply-To: <52b8090f0711271411j61410cd2i11e2b52aabd67cfc@mail.gmail.com>
+References: <52b8090f0711271411j61410cd2i11e2b52aabd67cfc@mail.gmail.com>
+Message-ID: <792f5f410711271413w4dbc8ed0l646d0c41ff1d01d2@mail.gmail.com>
+
+On Nov 27, 2007 10:11 PM, Jean-Francois Richard <trucker at genkernel.org> wrote:
+> The UnionFS team publishes a Git tree that contains all the UnionFS patches.
+>
+> The instructions to get it are available at
+> http://www.filesystems.org/unionfs-git.html
+>
+> Once it is cloned to a directory, it is easy to build an UnionFS
+> kernel simply by doing
+>
+> $ genkernel-from-git "path/to/kernel-with-unionfs.git" latest -- \
+>   --install-to-prefix /home/bla/gkout
+>   --menuconfig all::
+>
+> Since UnionFS will probably be included in the mainline kernel
+> someday, it might be better to document the above instead of working
+> on a gk module.  What is your opinion on this?
+
+What about the userspace tools that are/were needed inside gmi? Are
+they no longer necessary?
+
+> Also, should the gk unionfs module be dropped?  It is currently
+> "hard-deprecated".
+
+See question above -- if userspace tools are still required, a module
+is still required to compile them and push them inside the initramfs.
+Otherwise, the module can be discarded.
+
+Tim
+
+
+From trucker at genkernel.org  Wed Nov 28 00:14:43 2007
+From: trucker at genkernel.org (Jean-Francois Richard)
+Date: Tue, 27 Nov 2007 18:14:43 -0500
+Subject: [Genkernel-dev] Using the UnionFS-patched kernel tree
+In-Reply-To: <792f5f410711271413w4dbc8ed0l646d0c41ff1d01d2@mail.gmail.com>
+References: <52b8090f0711271411j61410cd2i11e2b52aabd67cfc@mail.gmail.com>
+	<792f5f410711271413w4dbc8ed0l646d0c41ff1d01d2@mail.gmail.com>
+Message-ID: <52b8090f0711271514n2d9c461cq3bdbea10ecc8645b@mail.gmail.com>
+
+On 11/27/07, Tim Yamin <plasmaroo at genkernel.org> wrote:
+> What about the userspace tools that are/were needed inside gmi? Are
+> they no longer necessary?
+>
+> > Also, should the gk unionfs module be dropped?  It is currently
+> > "hard-deprecated".
+>
+> See question above -- if userspace tools are still required, a module
+> is still required to compile them and push them inside the initramfs.
+> Otherwise, the module can be discarded.
+
+UnionFS 2.x uses a "mount -o remount,..." strategy for branch
+management.  See this post for a quick introduction:
+
+http://article.gmane.org/gmane.linux.kernel/513762
+
+-- 
+Jean-Francois Richard
+
+
+From plasmaroo at genkernel.org  Wed Nov 28 00:16:18 2007
+From: plasmaroo at genkernel.org (Tim Yamin)
+Date: Tue, 27 Nov 2007 23:16:18 +0000
+Subject: [Genkernel-dev] Using the UnionFS-patched kernel tree
+In-Reply-To: <52b8090f0711271514n2d9c461cq3bdbea10ecc8645b@mail.gmail.com>
+References: <52b8090f0711271411j61410cd2i11e2b52aabd67cfc@mail.gmail.com>
+	<792f5f410711271413w4dbc8ed0l646d0c41ff1d01d2@mail.gmail.com>
+	<52b8090f0711271514n2d9c461cq3bdbea10ecc8645b@mail.gmail.com>
+Message-ID: <792f5f410711271516o7db79a7cv9ca11852eef0e85@mail.gmail.com>
+
+On Nov 27, 2007 11:14 PM, Jean-Francois Richard <trucker at genkernel.org> wrote:
+> UnionFS 2.x uses a "mount -o remount,..." strategy for branch
+> management.  See this post for a quick introduction:
+>
+> http://article.gmane.org/gmane.linux.kernel/513762
+
+Then yes, the module can go...
+
+Tim
+
+

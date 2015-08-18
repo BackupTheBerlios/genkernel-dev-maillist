@@ -1,0 +1,91 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Genkernel-dev] post-root hook: install modules to final root
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/genkernel-dev/2007-December/index.html" >
+   <LINK REL="made" HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20post-root%20hook%3A%20install%20modules%20to%20final%20root&In-Reply-To=%3C52b8090f0712060812s7d8fbdf7pdb12a2a38c943c75%40mail.gmail.com%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000012.html">
+   <LINK REL="Next"  HREF="000014.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Genkernel-dev] post-root hook: install modules to final root</H1>
+    <B>Jean-Francois Richard</B> 
+    <A HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20post-root%20hook%3A%20install%20modules%20to%20final%20root&In-Reply-To=%3C52b8090f0712060812s7d8fbdf7pdb12a2a38c943c75%40mail.gmail.com%3E"
+       TITLE="[Genkernel-dev] post-root hook: install modules to final root">trucker at genkernel.org
+       </A><BR>
+    <I>Thu Dec  6 17:12:27 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000012.html">[Genkernel-dev] pre-root and post-root hooks
+</A></li>
+        <LI>Next message: <A HREF="000014.html">[Genkernel-dev] Auto download distfiles
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#13">[ date ]</a>
+              <a href="thread.html#13">[ thread ]</a>
+              <a href="subject.html#13">[ subject ]</a>
+              <a href="author.html#13">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>I would like to make it easy to use a given vanilla distribution as a
+read-only bottom layer and boot it with a genkernel kernel.  I believe
+this would make it easy to turn any squashfs/loop image into some kind
+of &quot;LiveNFS&quot; or &quot;LiveHTTP&quot; system, with gmi.
+
+However, since the vanilla distribution squashfs does not include a
+/lib/modules/&lt;gk-kernel-version&gt; tree, all modprobing done inside the
+booted OS will fail.
+
+
+To fix this, a possibility would be to
+
+a) generate a cpio containing the whole generated /lib/modules and
+insert it into the initramfs.  There is already a
+--kernel-modules-cpio that does this, I believe.
+
+b) Add a post-root hook, that would work like this :
+
+if all modules are included in the initramfs (check for
+/lib/modules/.../modules.dep)
+    if root is read-write
+        if root does not contain /lib/modules/&lt;proper-version&gt;
+            copy from initramfs to the root/lib/modules/&lt;proper-version&gt;
+
+
+Do you see any problems with this method?
+
+
+-- 
+Jean-Francois Richard
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000012.html">[Genkernel-dev] pre-root and post-root hooks
+</A></li>
+	<LI>Next message: <A HREF="000014.html">[Genkernel-dev] Auto download distfiles
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#13">[ date ]</a>
+              <a href="thread.html#13">[ thread ]</a>
+              <a href="subject.html#13">[ subject ]</a>
+              <a href="author.html#13">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/genkernel-dev">More information about the Genkernel-dev
+mailing list</a><br>
+</body></html>

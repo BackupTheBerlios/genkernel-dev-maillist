@@ -1,0 +1,175 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Genkernel-dev] [PATCH] dist/ directory in user's cache
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/genkernel-dev/2007-November/index.html" >
+   <LINK REL="made" HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20%5BPATCH%5D%20dist/%20directory%20in%20user%27s%20cache&In-Reply-To=%3C1195249063581-git-send-email-trucker%40genkernel.org%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000004.html">
+   <LINK REL="Next"  HREF="000006.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Genkernel-dev] [PATCH] dist/ directory in user's cache</H1>
+    <B>Jean-Francois Richard</B> 
+    <A HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20%5BPATCH%5D%20dist/%20directory%20in%20user%27s%20cache&In-Reply-To=%3C1195249063581-git-send-email-trucker%40genkernel.org%3E"
+       TITLE="[Genkernel-dev] [PATCH] dist/ directory in user's cache">trucker at genkernel.org
+       </A><BR>
+    <I>Fri Nov 16 22:37:43 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000004.html">[Genkernel-dev] [PATCH] Use the running kernel config automatically
+</A></li>
+        <LI>Next message: <A HREF="000006.html">[Genkernel-dev] [PATCH] Tool to build from a git kernel tree
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#5">[ date ]</a>
+              <a href="thread.html#5">[ thread ]</a>
+              <a href="subject.html#5">[ subject ]</a>
+              <a href="author.html#5">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>A dist/ directory is created in the user's cache.  The directory is
+populated with symlinks to the distributed packages.
+
+This change gives write access to the dist/ directory by users, paving
+the way for automatic downloads of needed packages from genkernel.org.
+---
+ trunk/TODO                     |   12 ++----------
+ trunk/genkernel                |   22 +++++++++++++++++++---
+ trunk/modules/kernel_config.sh |    6 ++----
+ 3 files changed, 23 insertions(+), 17 deletions(-)
+
+diff --git a/trunk/TODO b/trunk/TODO
+index c5ef4aa..1c3c160 100644
+--- a/trunk/TODO
++++ b/trunk/TODO
+@@ -1,15 +1,7 @@
+ Things to fix:
+ 
+-* [FIXED-jf] Should cleanup TEMP and possibly other places before exiting?
+-  - $TEMP is cleaned up.
+-  - the logfile is kept outside $TEMP so it is not deleted
+-
+-* dist files should be downloaded automatically
+-  jf: the dist could be ... a dir in the cache, that symlinks every
+-  file to the system dist/ files.  then downloads if needed 
+-  automagic, no directory needed in the home dir of the user 
+-  jf: it could maybe try the gentoo mirror for now
+-
++* Put up an <A HREF="http://genkernel.org/dist/">http://genkernel.org/dist/</A> repository, and auto-download
++  the need files to local cache if needed
+ 
+ * cmdline kernel config parameter changing
+ 
+diff --git a/trunk/genkernel b/trunk/genkernel
+index 03e4c75..25415ba 100755
+--- a/trunk/genkernel
++++ b/trunk/genkernel
+@@ -112,9 +112,6 @@ done
+ profile_copy cmdline &quot;user&quot;
+ 
+ determine_profile
+-
+-# We now know the profile so set default CACHE_DIR and CONFIG_DIR
+-CACHE_DIR=&quot;${CACHE_DIR}/$(profile_get_key profile)&quot;
+ CONFIG_DIR=&quot;${CONFIG_DIR}/$(profile_get_key profile)&quot;
+ 
+ # setup the systems profile and copy it into the running profile
+@@ -160,6 +157,7 @@ fi
+ clear_log
+ genkernel_print_header
+ 
++
+ # FIXME: Needs to be absolute path
+ mkdir -p &quot;${CACHE_DIR}&quot; &amp;&gt; /dev/null
+ 
+@@ -170,6 +168,24 @@ if [ ! -w &quot;${CACHE_DIR}&quot; ]; then
+     [ ! -w &quot;${CACHE_DIR}&quot; ] &amp;&amp; die &quot;Cannot have write access to cache directory '${CACHE_DIR}'!&quot;
+ fi
+ 
++# Symlink dist files to the user's cache, so we can 
++# download needed files to it eventually
++mkdir -p &quot;${CACHE_DIR}/dist&quot; 2&gt;/dev/null
++[ ! -w &quot;${CACHE_DIR}/dist&quot; ] &amp;&amp; \
++    die &quot;Cannot have write access to dist cache directory '${CACHE_DIR}/dist'!&quot;
++for i in &quot;${SRCPKG_DIR}/&quot;*; do
++    ln -sf &quot;${i}&quot; &quot;${CACHE_DIR}/dist&quot;
++done
++SRCPKG_DIR=&quot;${CACHE_DIR}/dist&quot;
++
++# Final cache dir is set to be profile-related
++# 
++mkdir -p &quot;${CACHE_DIR}/$(profile_get_key profile)&quot; 2&gt;/dev/null
++[ ! -w &quot;${CACHE_DIR}/$(profile_get_key profile)&quot; ] &amp;&amp; \
++    die &quot;Cannot have write access to profile cache directory '${CACHE_DIR}/$(profile_get_key profile)'!&quot;
++CACHE_DIR=&quot;${CACHE_DIR}/$(profile_get_key profile)&quot;
++
++
+ genkernel_lookup_packages
+ genkernel_lookup_kernel
+ 
+diff --git a/trunk/modules/kernel_config.sh b/trunk/modules/kernel_config.sh
+index 73db9ea..46044f2 100644
+--- a/trunk/modules/kernel_config.sh
++++ b/trunk/modules/kernel_config.sh
+@@ -70,8 +70,6 @@ kernel_config::()
+ 	cp &quot;${KERNEL_CONFIG}&quot; &quot;$(profile_get_key kbuild-output)/.config&quot; ||\
+ 	    die 'Could not copy configuration file!'
+ 
+-	cd &quot;$(profile_get_key kbuild-output)&quot;
+-	
+ 	if logicTrue $(profile_get_key clean)
+ 	then
+ 		print_info 1 'kernel configure: &gt;&gt; Running clean...' 
+@@ -79,7 +77,7 @@ kernel_config::()
+ 	else
+ 		print_info 1 &quot;${PRINT_PREFIX}--no-clean is enabled; leaving the .config alone.&quot;	
+ 	fi
+-	
++
+ 	# Manual Configure
+ 	if logicTrue $(profile_get_key defconfig)
+ 	then
+@@ -182,7 +180,7 @@ kernel_config::()
+         # we end up in a good state; else it won't change anything
+ 	print_info 1 &quot;${PRINT_PREFIX}&gt;&gt; Final pass at oldconfig to make sure everything is OK...&quot;
+ 	yes '' 2&gt;/dev/null | compile_generic ${KERNEL_ARGS} oldconfig
+-	[ &quot;$?&quot; ] || die 'Error: silentoldconfig failed!'
++	[ &quot;$?&quot; ] || die 'Error: oldconfig failed!'
+ 
+ 
+ 	compile_generic ${KERNEL_ARGS} prepare
+-- 
+1.5.2.5
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000004.html">[Genkernel-dev] [PATCH] Use the running kernel config automatically
+</A></li>
+	<LI>Next message: <A HREF="000006.html">[Genkernel-dev] [PATCH] Tool to build from a git kernel tree
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#5">[ date ]</a>
+              <a href="thread.html#5">[ thread ]</a>
+              <a href="subject.html#5">[ subject ]</a>
+              <a href="author.html#5">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/genkernel-dev">More information about the Genkernel-dev
+mailing list</a><br>
+</body></html>

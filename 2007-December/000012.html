@@ -1,0 +1,75 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Genkernel-dev] pre-root and post-root hooks
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/genkernel-dev/2007-December/index.html" >
+   <LINK REL="made" HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20pre-root%20and%20post-root%20hooks&In-Reply-To=%3C52b8090f0712060809g190bfc93rf60da31f0a165bf5%40mail.gmail.com%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="000013.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Genkernel-dev] pre-root and post-root hooks</H1>
+    <B>Jean-Francois Richard</B> 
+    <A HREF="mailto:genkernel-dev%40lists.berlios.de?Subject=Re%3A%20%5BGenkernel-dev%5D%20pre-root%20and%20post-root%20hooks&In-Reply-To=%3C52b8090f0712060809g190bfc93rf60da31f0a165bf5%40mail.gmail.com%3E"
+       TITLE="[Genkernel-dev] pre-root and post-root hooks">trucker at genkernel.org
+       </A><BR>
+    <I>Thu Dec  6 17:09:29 CET 2007</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="000013.html">[Genkernel-dev] post-root hook: install modules to final root
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#12">[ date ]</a>
+              <a href="thread.html#12">[ thread ]</a>
+              <a href="subject.html#12">[ subject ]</a>
+              <a href="author.html#12">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Hi,
+
+I was thinking of adding two directories: $LIBGMI/pre-root and
+$LIBGMI/post-root.  The hook scripts would be much like the fsloaders,
+with parameter parsing and help directives.  /init would run, you
+guessed it, all scripts in pre-root after the network setup, and all
+scripts in post-root after the union mounting is over.
+
+Already, the &quot;unpack&quot; directive could be moved to a &quot;post-root&quot; hook.
+
+kernel root=blah;blah; post-root=unpack:/mnt/tar1.gz:/mnt/tar2.gz;
+
+Tim, probably the zonbu stuff could use such a scheme?
+
+-- 
+Jean-Francois Richard
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="000013.html">[Genkernel-dev] post-root hook: install modules to final root
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#12">[ date ]</a>
+              <a href="thread.html#12">[ thread ]</a>
+              <a href="subject.html#12">[ subject ]</a>
+              <a href="author.html#12">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/genkernel-dev">More information about the Genkernel-dev
+mailing list</a><br>
+</body></html>
